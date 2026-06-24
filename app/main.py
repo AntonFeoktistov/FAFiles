@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.routers import resources
+
 from .database import Base, engine
 from .redis_client import redis_client
 from .routers import auth
@@ -27,3 +29,4 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(resources.router)

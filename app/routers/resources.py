@@ -1,114 +1,71 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi import File as FastAPIFile
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import File, Folder
+from app.services.file_service import FileService
+from app.services.folder_service import FolderService
 
 from ..auth import get_current_user
 from ..database import get_db
 from ..schemas import FileResponse, FolderResponse, SessionData
-from ..services import PathService, StorageService
 
 router = APIRouter(prefix="/resource", tags=["resources"])
 
 
-@router.get("/")
-async def get_resource(
-    path: str = Query(..., description="Полный путь к ресурсу"),
-    db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
-):
+# @router.get("/")
+# async def get_resource(
+#     path: str = Query(..., description="Полный путь к ресурсу"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: SessionData = Depends(get_current_user),
+# ):
 
-    folder, file = await PathService.get_resource_by_path(
-        path, current_user.user_id, db
-    )
+#     folder, file = await PathService.get_resource_by_path(
+#         path, current_user.user_id, db
+#     )
 
-    if not folder and not file:
-        raise HTTPException(404, "Resource not found")
+#     if not folder and not file:
+#         raise HTTPException(404, "Resource not found")
 
-    if folder:
-        path = folder.parent.full_path if folder.parent else ""
-        return FolderResponse(path=path, name=folder.name, type="DIRECTORY")
+#     if folder:
+#         path = folder.parent.full_path if folder.parent else ""
+#         return FolderResponse(path=path, name=folder.name, type="DIRECTORY")
 
-    else:
-        path = file.folder.full_path + "/" if file.folder else ""
-        return FileResponse(path=path, name=file.name, size=file.size, type="FILE")
+#     else:
+#         path = file.folder.full_path + "/" if file.folder else ""
+#         return FileResponse(path=path, name=file.name, size=file.size, type="FILE")
 
 
 @router.post("/create-folder", status_code=201, response_model=FolderResponse)
 async def create_folder(
     name: str = Query(..., description="Имя папки"),
-    parent_path: str = Query(description="Путь к родительской папке"),
+    parent_path: str | None = Query(
+        default=None,
+        description="Путь к родительской папке (оставьте пустым для корня)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: SessionData = Depends(get_current_user),
 ):
 
-    full_path = f"{parent_path}/{name}/".replace("//", "/")
+    if not parent_path:
+        parent_path = f"/{current_user.username}-files/"
 
-    existing = await db.execute(
-        select(Folder).where(
-            Folder.user_id == current_user.user_id, Folder.full_path == full_path
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(409, "Folder already exists")
-
-    parent = None
-    if parent_path:
-        parent_result = await db.execute(
-            select(Folder).where(
-                Folder.user_id == current_user.user_id, Folder.full_path == parent_path
-            )
-        )
-        parent = parent_result.scalar_one_or_none()
-        if not parent:
-            raise HTTPException(404, "Parent folder not found")
-
-    new_folder = Folder(
-        user_id=current_user.user_id,
-        name=name,
-        parent_id=parent.id if parent else None,
-        full_path=full_path,
+    new_folder = await FolderService.create_folder(
+        name=name, parent_path=parent_path, user_id=current_user.user_id, db=db
     )
 
-    db.add(new_folder)
-    await db.commit()
-    await db.refresh(new_folder)
-
-    return FolderResponse(
-        path=parent_path + "/" if parent_path else "",
-        name=name,
-    )
+    return FolderResponse(path=parent_path, name=name, type="DIRECTORY")
 
 
 @router.post("/create-file", status_code=201)
 async def upload_file(
-    path: str = Query(..., description="Путь к папке, в которую загружаем"),
+    folder_path: str = Query(..., description="Путь к папке, в которую загружаем"),
     file: UploadFile = FastAPIFile(...),
     db: AsyncSession = Depends(get_db),
     current_user: SessionData = Depends(get_current_user),
 ):
-
-    folder = await PathService.get_resource_by_path(path, current_user.user_id, db)
-
-    file_path = f"{folder.full_path}/{file.filename}"
-
-    exists = await StorageService.file_exists(file_path)
-    if exists:
-        raise HTTPException(409, f"File {file.filename} already exists")
-
-    await StorageService.upload_file(file_path, file.file)
-
-    new_file = File(
-        user_id=current_user.user_id,
-        folder_id=folder.id,
-        name=file.filename,
-        file_path=file_path,
+    new_file = await FileService.create_file(
+        folder_path, current_user.user_id, db, file
     )
-    db.add(new_file)
-    await db.commit()
-    await db.refresh(new_file)
 
     return FileResponse(path=new_file.file_path, name=new_file.name, size=file.size)
 
