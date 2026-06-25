@@ -36,7 +36,7 @@ async def register(
     await db.refresh(new_user)
 
     root_folder = await FolderService.create_folder(
-        name=f"{new_user.username}-files", parent_path="", user_id=new_user.id, db=db
+        name=f"/{new_user.username}-files", parent_path="", user_id=new_user.id, db=db
     )
 
     session_data = {

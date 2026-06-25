@@ -35,7 +35,6 @@ class FolderResponse(BaseModel):
 class FileResponse(BaseModel):
     path: str
     name: str
-    size: int
     type: str = "FILE"
 
 

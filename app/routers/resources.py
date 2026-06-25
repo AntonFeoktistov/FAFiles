@@ -7,32 +7,36 @@ from app.services.folder_service import FolderService
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..schemas import FileResponse, FolderResponse, SessionData
+from ..schemas import FileResponse, FolderDetailResponse, FolderResponse, SessionData
 
 router = APIRouter(prefix="/resource", tags=["resources"])
 
 
-# @router.get("/")
-# async def get_resource(
-#     path: str = Query(..., description="Полный путь к ресурсу"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: SessionData = Depends(get_current_user),
-# ):
+@router.get("/")
+async def get_folder_files(
+    folder_path: str = Query(..., description="Полный путь к ресурсу"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+) -> FolderDetailResponse:
 
-#     folder, file = await PathService.get_resource_by_path(
-#         path, current_user.user_id, db
-#     )
+    folder = await FolderService.get_folder_with_children(
+        folder_path, current_user.user_id, db
+    )
 
-#     if not folder and not file:
-#         raise HTTPException(404, "Resource not found")
+    subfolders = []
+    files = []
 
-#     if folder:
-#         path = folder.parent.full_path if folder.parent else ""
-#         return FolderResponse(path=path, name=folder.name, type="DIRECTORY")
+    for subfolder in folder.subfolders:
+        subfolder_data = FolderResponse(path=subfolder.full_path, name=subfolder.name)
+        subfolders.append(subfolder_data)
 
-#     else:
-#         path = file.folder.full_path + "/" if file.folder else ""
-#         return FileResponse(path=path, name=file.name, size=file.size, type="FILE")
+    for file in folder.files:
+        file_data = FileResponse(path=file.file_path, name=file.name)
+        files.append(file_data)
+
+    return FolderDetailResponse(
+        subfolders=subfolders, files=files, path=folder.full_path, name=folder.name
+    )
 
 
 @router.post("/create-folder", status_code=201, response_model=FolderResponse)
