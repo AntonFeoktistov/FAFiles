@@ -3,6 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.services.file_service import FileService
+
 from ..models import Folder
 
 
@@ -61,3 +63,43 @@ class FolderService:
             raise HTTPException(404, "Folder not found")
 
         return folder
+
+    @staticmethod
+    async def delete_folder(folder_path: str, user_id: int, db: AsyncSession) -> bool:
+
+        folder_query = await db.execute(
+            select(Folder).where(
+                Folder.user_id == user_id, Folder.full_path == folder_path
+            )
+        )
+        folder = folder_query.scalar_one_or_none()
+
+        if not folder:
+            raise HTTPException(404, "Folder not found")
+
+        await load_all_children(folder, db)
+
+        all_files = []
+        collect_files(folder, all_files)
+
+        for file_obj in all_files:
+            await FileService.delete_file(file_obj.file_path, user_id, db)
+
+        await db.delete(folder)
+        await db.commit()
+
+        return True
+
+
+async def load_all_children(folder: Folder, db: AsyncSession):
+
+    await db.refresh(folder, attribute_names=["subfolders", "files"])
+
+    for subfolder in folder.subfolders:
+        await load_all_children(subfolder, db)
+
+
+def collect_files(folder: Folder, all_files: list):
+    all_files.extend(folder.files)
+    for subfolder in folder.subfolders:
+        collect_files(subfolder, all_files)

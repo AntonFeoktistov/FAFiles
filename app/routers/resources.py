@@ -74,31 +74,20 @@ async def upload_file(
     return FileResponse(path=new_file.file_path, name=new_file.name, size=file.size)
 
 
-# @router.delete("/")
-# async def delete_resource(
-#     path: str = Query(..., description="Полный путь к ресурсу"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: SessionData = Depends(get_current_user),
-# ):
-#     """Удаление ресурса"""
-#     folder, file = await PathService.get_resource_by_path(
-#         path, current_user.user_id, db
-#     )
+@router.delete("/", status_code=204)
+async def delete_resource(
+    path: str = Query(..., description="Полный путь к ресурсу"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+):
+    is_folder = path.endswith("/")
 
-#     if not folder and not file:
-#         raise HTTPException(404, "Resource not found")
+    if is_folder:
+        await FolderService.delete_folder(path, current_user.user_id, db)
+    if not is_folder:
+        await FileService.delete_file(path, current_user.user_id, db)
 
-#     if folder:
-#         # Удаляем папку и все файлы в ней
-#         await MinIOService.delete_folder(folder.full_path)
-#         await db.delete(folder)
-#     else:
-#         # Удаляем файл
-#         await MinIOService.delete_file(file.file_path)
-#         await db.delete(file)
-
-#     await db.commit()
-#     return {"message": "Resource deleted"}
+    return {"message": "Resource deleted"}
 
 
 # @router.get("/download")

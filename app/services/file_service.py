@@ -110,9 +110,7 @@ class FileService:
     async def get_file_by_path(
         file_path: str, user_id: int, db: AsyncSession
     ) -> Optional[File]:
-        """
-        Получить файл по пути.
-        """
+
         result = await db.execute(
             select(File).where(File.user_id == user_id, File.file_path == file_path)
         )
@@ -120,21 +118,16 @@ class FileService:
 
     @staticmethod
     async def delete_file(file_path: str, user_id: int, db: AsyncSession) -> bool:
-        """
-        Удаляет файл из MinIO и БД.
-        """
-        # Находим файл в БД
+
         file = await FileService.get_file_by_path(file_path, user_id, db)
         if not file:
             raise HTTPException(404, "File not found")
 
-        # Удаляем из MinIO
         try:
             minio_client.remove_object(BUCKET_NAME, file_path)
         except S3Error as e:
             raise HTTPException(500, f"MinIO delete error: {e}")
 
-        # Удаляем из БД
         await db.delete(file)
         await db.commit()
 
