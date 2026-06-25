@@ -5,6 +5,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import HTTPException, UploadFile
 from minio import Minio, S3Error
+from minio.commonconfig import CopySource
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -76,9 +77,6 @@ class FileService:
     async def _upload_file(
         file: UploadFile, path: str, content_type: Optional[str] = None
     ) -> dict:
-        """
-        Загружает файл в MinIO.
-        """
         try:
             content = await file.read()
             file_size = len(content)
@@ -107,19 +105,9 @@ class FileService:
             raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
     @staticmethod
-    async def get_file_by_path(
-        file_path: str, user_id: int, db: AsyncSession
-    ) -> Optional[File]:
-
-        result = await db.execute(
-            select(File).where(File.user_id == user_id, File.file_path == file_path)
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
     async def delete_file(file_path: str, user_id: int, db: AsyncSession) -> bool:
 
-        file = await FileService.get_file_by_path(file_path, user_id, db)
+        file = await FileService._get_file_by_path(file_path, user_id, db)
         if not file:
             raise HTTPException(404, "File not found")
 
@@ -132,3 +120,41 @@ class FileService:
         await db.commit()
 
         return True
+
+    @staticmethod
+    async def rename_file(
+        from_path: str, to_path: str, user_id: int, db: AsyncSession
+    ) -> File:
+
+        file = await FileService._get_file_by_path(from_path, user_id, db)
+        if not file:
+            raise HTTPException(404, "File not found")
+
+        existing_file = await FileService._get_file_by_path(to_path, user_id, db)
+        if existing_file:
+            raise HTTPException(409, "File already exists at target path")
+
+        try:
+            copy_source = CopySource(BUCKET_NAME, from_path)
+            minio_client.copy_object(BUCKET_NAME, to_path, copy_source)
+            minio_client.remove_object(BUCKET_NAME, from_path)
+        except S3Error as e:
+            raise HTTPException(500, f"MinIO operation failed: {e}")
+
+        file.file_path = to_path
+        file.name = to_path.split("/")[-1]
+
+        await db.commit()
+        await db.refresh(file)
+
+        return file
+
+    @staticmethod
+    async def _get_file_by_path(
+        file_path: str, user_id: int, db: AsyncSession
+    ) -> Optional[File]:
+
+        result = await db.execute(
+            select(File).where(File.user_id == user_id, File.file_path == file_path)
+        )
+        return result.scalar_one_or_none()

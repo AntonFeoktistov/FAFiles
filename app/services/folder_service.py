@@ -1,11 +1,11 @@
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.services.file_service import FileService
 
-from ..models import Folder
+from ..models import File, Folder
 
 
 class FolderService:
@@ -48,7 +48,91 @@ class FolderService:
         return new_folder
 
     @staticmethod
-    async def get_folder_with_children(
+    async def delete_folder(folder_path: str, user_id: int, db: AsyncSession) -> bool:
+
+        folder = FolderService._get_folder_with_children(folder_path, user_id, db)
+
+        await load_all_children(folder, db)
+
+        all_files = []
+        collect_files(folder, all_files)
+
+        for file_obj in all_files:
+            await FileService.delete_file(file_obj.file_path, user_id, db)
+
+        await db.delete(folder)
+        await db.commit()
+
+        return True
+
+    @staticmethod
+    async def rename_folder(
+        from_path: str, to_path: str, user_id: int, db: AsyncSession
+    ) -> bool:
+
+        folder = await FolderService._get_folder_only(from_path, user_id, db)
+
+        try:
+            await FolderService._get_folder_only(to_path, user_id, db)
+            raise HTTPException(409, "Folder already exists")
+        except HTTPException:
+            pass
+
+        await load_all_children(folder, db)
+
+        all_files = []
+        collect_files(folder, all_files)
+
+        for file in all_files:
+            from_path_file = from_path + file.name
+            to_path_file = to_path + file.name
+            await FileService.rename_file(from_path_file, to_path_file, user_id, db)
+
+        from_prefix_db = from_path if from_path.endswith("/") else from_path + "/"
+
+        await db.execute(
+            update(Folder)
+            .where(
+                Folder.user_id == user_id,
+                Folder.full_path.startswith(from_prefix_db),
+                Folder.full_path != from_path,
+            )
+            .values(full_path=func.replace(Folder.full_path, from_path, to_path))
+        )
+
+        await db.execute(
+            update(File)
+            .where(File.user_id == user_id, File.file_path.startswith(from_prefix_db))
+            .values(file_path=func.replace(File.file_path, from_path, to_path))
+        )
+
+        folder.full_path = to_path
+        folder.name = to_path.rstrip("/").split("/")[-1]
+
+        await db.commit()
+        await db.refresh(folder)
+
+        return True
+
+    @staticmethod
+    async def _get_folder_only(
+        folder_path: str, user_id: int, db: AsyncSession
+    ) -> Folder:
+
+        folder_query = await db.execute(
+            select(Folder).where(
+                Folder.user_id == user_id, Folder.full_path == folder_path
+            )
+        )
+        folder = folder_query.scalar_one_or_none()
+
+        if not folder:
+            raise HTTPException(404, "Folder not found")
+
+        return folder
+
+    @staticmethod
+    async def _get_folder_with_children(
         folder_path: str, user_id: int, db: AsyncSession
     ) -> Folder:
 
@@ -63,32 +147,6 @@ class FolderService:
             raise HTTPException(404, "Folder not found")
 
         return folder
-
-    @staticmethod
-    async def delete_folder(folder_path: str, user_id: int, db: AsyncSession) -> bool:
-
-        folder_query = await db.execute(
-            select(Folder).where(
-                Folder.user_id == user_id, Folder.full_path == folder_path
-            )
-        )
-        folder = folder_query.scalar_one_or_none()
-
-        if not folder:
-            raise HTTPException(404, "Folder not found")
-
-        await load_all_children(folder, db)
-
-        all_files = []
-        collect_files(folder, all_files)
-
-        for file_obj in all_files:
-            await FileService.delete_file(file_obj.file_path, user_id, db)
-
-        await db.delete(folder)
-        await db.commit()
-
-        return True
 
 
 async def load_all_children(folder: Folder, db: AsyncSession):

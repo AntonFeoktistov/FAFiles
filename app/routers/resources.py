@@ -90,59 +90,18 @@ async def delete_resource(
     return {"message": "Resource deleted"}
 
 
-# @router.get("/download")
-# async def download_resource(
-#     path: str = Query(..., description="Полный путь к ресурсу"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: SessionData = Depends(get_current_user),
-# ):
-#     """Скачивание ресурса (файла или папки в zip)"""
-#     folder, file = await PathService.get_resource_by_path(
-#         path, current_user.user_id, db
-#     )
+@router.post("/rename")
+async def rename_resource(
+    from_path: str = Query(..., description="Старый путь"),
+    to_path: str = Query(..., description="Новый путь"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+):
+    is_folder = from_path.endswith("/")
 
-#     if not folder and not file:
-#         raise HTTPException(404, "Resource not found")
+    if is_folder:
+        await FolderService.rename_folder(from_path, to_path, current_user.user_id, db)
+    if not is_folder:
+        await FileService.rename_file(from_path, to_path, current_user.user_id, db)
 
-#     if folder:
-#         # Скачиваем папку как zip
-#         return await MinIOService.download_folder_as_zip(folder.full_path)
-#     else:
-#         # Скачиваем файл
-#         return await MinIOService.download_file(file.file_path)
-
-
-# @router.post("/move")
-# async def move_resource(
-#     from_path: str = Query(..., description="Старый путь"),
-#     to_path: str = Query(..., description="Новый путь"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: SessionData = Depends(get_current_user),
-# ):
-#     """Перемещение или переименование ресурса"""
-#     # Получаем исходный ресурс
-#     folder, file = await PathService.get_resource_by_path(
-#         from_path, current_user.user_id, db
-#     )
-
-#     if not folder and not file:
-#         raise HTTPException(404, "Resource not found")
-
-#     # Проверяем, не существует ли уже ресурс по новому пути
-#     new_folder, new_file = await PathService.get_resource_by_path(
-#         to_path, current_user.user_id, db
-#     )
-#     if new_folder or new_file:
-#         raise HTTPException(409, "Resource already exists at target path")
-
-#     # Перемещаем в MinIO
-#     if folder:
-#         await MinIOService.rename_folder(folder.full_path, to_path)
-#         # Обновляем путь в БД
-#         # ... обновление full_path у папки и всех вложенных
-#     else:
-#         await MinIOService.rename_file(file.file_path, to_path)
-#         file.file_path = to_path
-#         await db.commit()
-
-#     return {"message": "Resource moved"}
+    return {"message": "Resource moved"}
