@@ -1,9 +1,3 @@
-import pytest
-
-pytestmark = pytest.mark.asyncio(loop_scope="function")
-
-
-@pytest.mark.asyncio
 async def test_get_folder_files(auth_client, test_user):
 
     response = await auth_client.get(
@@ -30,7 +24,6 @@ async def test_get_folder_files(auth_client, test_user):
         assert "file_path" in file
 
 
-@pytest.mark.asyncio
 async def test_get_folder_files_incorrect_path(auth_client, test_user):
     response = await auth_client.get(
         "/resource/",

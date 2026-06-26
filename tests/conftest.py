@@ -5,21 +5,19 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import pytest_asyncio
+import pytest
 from dotenv import load_dotenv
 from fastapi import Response
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+load_dotenv(".env.test")
 from app.auth import create_session, get_current_user, hash_password
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
 from app.redis_client import redis_client
-
-load_dotenv(".env.test")
 
 TEST_DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 
@@ -33,7 +31,7 @@ test_engine = create_async_engine(
 TestingSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def event_loop():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -43,7 +41,7 @@ async def event_loop():
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def db_session():
     loop = asyncio.get_running_loop()
 
@@ -60,7 +58,7 @@ async def db_session():
         raise
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def client(db_session: AsyncSession):
     await redis_client.connect()
 
@@ -80,7 +78,7 @@ async def client(db_session: AsyncSession):
         await redis_client.client.aclose()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def test_user(db_session: AsyncSession) -> User:
     password_hash = hash_password("testpass123")
     user = User(username="testuser", password_hash=password_hash)
@@ -97,7 +95,7 @@ async def test_user(db_session: AsyncSession) -> User:
     return user
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def test_folder(test_user: User, db_session: AsyncSession):
     from app.services.folder_service import FolderService
 
@@ -110,7 +108,7 @@ async def test_folder(test_user: User, db_session: AsyncSession):
     return folder
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def auth_client(client: AsyncClient, test_user: User):
     response = Response()
     session_data = {
@@ -133,7 +131,7 @@ async def auth_client(client: AsyncClient, test_user: User):
     return client
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def unauth_client(db_session: AsyncSession):
     async def override_get_db():
         yield db_session
