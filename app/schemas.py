@@ -38,6 +38,11 @@ class FileResponse(BaseModel):
     type: str = "FILE"
 
 
+class FileFilterResponse(BaseModel):
+    folder_path: str
+    name: str
+
+
 class FolderDetailResponse(FolderResponse):
     subfolders: List[FolderResponse] = []
     files: List[FileResponse] = []

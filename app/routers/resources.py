@@ -7,7 +7,13 @@ from app.services.folder_service import FolderService
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..schemas import FileResponse, FolderDetailResponse, FolderResponse, SessionData
+from ..schemas import (
+    FileFilterResponse,
+    FileResponse,
+    FolderDetailResponse,
+    FolderResponse,
+    SessionData,
+)
 
 router = APIRouter(prefix="/resource", tags=["resources"])
 
@@ -105,3 +111,20 @@ async def rename_resource(
         await FileService.rename_file(from_path, to_path, current_user.user_id, db)
 
     return {"message": "Resource moved"}
+
+
+@router.get("/search")
+async def find_files(
+    query: str = Query(..., min_length=2, description="Строка для поиска"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+) -> list[FileFilterResponse]:
+
+    all_files = await FolderService.find_files(query, current_user.user_id, db)
+    files = []
+    for file in all_files:
+        folder_path = "/".join(file.file_path.split("/")[:-1]) + "/"
+        file_data = FileFilterResponse(folder_path=folder_path, name=file.name)
+        files.append(file_data)
+
+    return files

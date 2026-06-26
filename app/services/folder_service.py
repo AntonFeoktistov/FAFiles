@@ -148,6 +148,14 @@ class FolderService:
 
         return folder
 
+    @staticmethod
+    async def find_files(query: str, user_id: int, db: AsyncSession) -> list[File]:
+        files_query = await db.execute(
+            select(File).where(File.user_id == user_id, File.name.contains(query))
+        )
+        files = files_query.scalars().all()
+        return files
+
 
 async def load_all_children(folder: Folder, db: AsyncSession):
 
