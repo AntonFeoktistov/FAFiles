@@ -1,9 +1,11 @@
 import io
 import os
 from typing import Optional
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 from fastapi import HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from minio import Minio, S3Error
 from minio.commonconfig import CopySource
 from sqlalchemy import select
@@ -148,6 +150,41 @@ class FileService:
         await db.refresh(file)
 
         return file
+
+    @staticmethod
+    async def download_file(file_path: str, user_id: int, db: AsyncSession):
+
+        file_obj = await FileService._get_file_by_path(file_path, user_id, db)
+        if not file_obj:
+            raise HTTPException(404, "File not found")
+
+        try:
+            response = minio_client.get_object(BUCKET_NAME, file_path)
+
+            content_type = "application/octet-stream"
+            if file_obj.name.endswith(".pdf"):
+                content_type = "application/pdf"
+            elif file_obj.name.endswith(".jpg") or file_obj.name.endswith(".jpeg"):
+                content_type = "image/jpeg"
+            elif file_obj.name.endswith(".png"):
+                content_type = "image/png"
+            elif file_obj.name.endswith(".txt"):
+                content_type = "text/plain"
+
+            encoded_filename = quote(file_obj.name, encoding="utf-8")
+
+            return StreamingResponse(
+                response,
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f'attachment; filename="{encoded_filename}"',
+                    "Content-Length": str(response.headers.get("Content-Length", 0)),
+                },
+            )
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                raise HTTPException(404, "File not found in storage")
+            raise HTTPException(500, f"MinIO error: {e}")
 
     @staticmethod
     async def _get_file_by_path(

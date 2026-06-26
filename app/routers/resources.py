@@ -128,3 +128,19 @@ async def find_files(
         files.append(file_data)
 
     return files
+
+
+@router.get("/download")
+async def download_file(
+    path: str = Query(..., description="Путь к файлу"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+):
+    is_folder = path.endswith("/")
+
+    if is_folder:
+        response = await FolderService.download_folder(path, current_user.user_id, db)
+
+    if not is_folder:
+        response = await FileService.download_file(path, current_user.user_id, db)
+    return response

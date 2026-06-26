@@ -1,4 +1,11 @@
+import os
+import tempfile
+import zipfile
+from urllib.parse import quote
+
 from fastapi import HTTPException
+from fastapi.responses import StreamingResponse
+from minio import S3Error
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -6,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.services.file_service import FileService
 
 from ..models import File, Folder
+from .file_service import BUCKET_NAME, minio_client
 
 
 class FolderService:
@@ -155,6 +163,92 @@ class FolderService:
         )
         files = files_query.scalars().all()
         return files
+
+    @staticmethod
+    async def download_folder(folder_path: str, user_id: int, db: AsyncSession):
+
+        folder = await FolderService._get_folder_only(folder_path, user_id, db)
+        if not folder:
+            raise HTTPException(404, "Folder not found")
+
+        files_query = await db.execute(
+            select(File).where(
+                File.user_id == user_id, File.file_path.startswith(folder_path)
+            )
+        )
+        all_files = files_query.scalars().all()
+
+        if not all_files:
+            raise HTTPException(404, "Folder is empty")
+
+        return await FolderService._download_folder_as_zip(
+            folder_path, folder.name, all_files
+        )
+
+    @staticmethod
+    async def _download_folder_as_zip(
+        folder_path: str, folder_name: str, files: list
+    ) -> StreamingResponse:
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+        tmp_path = tmp.name
+        tmp.close()
+
+        try:
+            with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for file_obj in files:
+                    try:
+                        response = minio_client.get_object(
+                            BUCKET_NAME, file_obj.file_path
+                        )
+                        content = response.read()
+                        response.close()
+                        response.release_conn()
+
+                        arcname = file_obj.file_path[len(folder_path) :]
+                        zip_file.writestr(arcname, content)
+
+                    except S3Error as e:
+                        print(f"Error: {e}")
+                        continue
+        except Exception:
+            os.unlink(tmp_path)
+            raise
+
+        def iter_file():
+            try:
+                with open(tmp_path, "rb") as f:
+                    yield from f
+            finally:
+                os.unlink(tmp_path)
+
+        encoded_name = quote(folder_name, encoding="utf-8")
+
+        return StreamingResponse(
+            iter_file(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}.zip",
+                "Content-Length": str(os.path.getsize(tmp_path)),
+            },
+        )
+
+    @staticmethod
+    def _get_content_type(filename: str) -> str:
+        ext = filename.split(".")[-1].lower() if "." in filename else ""
+        types = {
+            "pdf": "application/pdf",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "txt": "text/plain",
+            "doc": "application/msword",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls": "application/vnd.ms-excel",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+        return types.get(ext, "application/octet-stream")
 
 
 async def load_all_children(folder: Folder, db: AsyncSession):
