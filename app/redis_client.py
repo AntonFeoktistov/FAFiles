@@ -15,7 +15,7 @@ class RedisClient:
         return self.client
 
     async def set_session(self, key: str, data: dict, ttl: int):
-        await self.client.setex(key, ttl, json.dumps(data))
+        await self.client.set(key, json.dumps(data), ex=ttl)
 
     async def get(self, key: str) -> Optional[str]:
         return await self.client.get(key)
@@ -28,7 +28,7 @@ class RedisClient:
 
     async def close(self):
         if self.client:
-            await self.client.close()
+            await self.client.aclose()
 
 
 redis_client = RedisClient()

@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request, Response
 
 from .config import settings
 from .redis_client import redis_client
-from .schemas import SessionData
+from .schemas import UserResponse
 
 
 def hash_password(password: str) -> str:
@@ -62,7 +62,7 @@ async def refresh_session_ttl(session_id: str):
     await redis_client.expire(session_key, settings.SESSION_TTL)
 
 
-async def get_current_user(request: Request) -> SessionData:
+async def get_current_user(request: Request) -> UserResponse:
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -73,7 +73,7 @@ async def get_current_user(request: Request) -> SessionData:
 
     await refresh_session_ttl(session_id)
 
-    return SessionData(
+    return UserResponse(
         user_id=session_data["user_id"],
         username=session_data["username"],
     )

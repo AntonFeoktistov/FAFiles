@@ -9,7 +9,7 @@ DATABASE_URL = f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRE
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,
+    echo=False,
     future=True,
 )
 

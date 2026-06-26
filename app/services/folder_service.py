@@ -58,7 +58,7 @@ class FolderService:
     @staticmethod
     async def delete_folder(folder_path: str, user_id: int, db: AsyncSession) -> bool:
 
-        folder = FolderService._get_folder_with_children(folder_path, user_id, db)
+        folder = FolderService.get_folder_with_children(folder_path, user_id, db)
 
         await load_all_children(folder, db)
 
@@ -140,7 +140,7 @@ class FolderService:
         return folder
 
     @staticmethod
-    async def _get_folder_with_children(
+    async def get_folder_with_children(
         folder_path: str, user_id: int, db: AsyncSession
     ) -> Folder:
 

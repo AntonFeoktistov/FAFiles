@@ -1,6 +1,6 @@
 from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UserCreate(BaseModel):
@@ -14,11 +14,10 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    user_id: int
     username: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionData(BaseModel):
@@ -46,6 +45,3 @@ class FileFilterResponse(BaseModel):
 class FolderDetailResponse(FolderResponse):
     subfolders: List[FolderResponse] = []
     files: List[FileResponse] = []
-
-    class Config:
-        from_attributes = True

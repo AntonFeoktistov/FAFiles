@@ -12,7 +12,7 @@ from ..schemas import (
     FileResponse,
     FolderDetailResponse,
     FolderResponse,
-    SessionData,
+    UserResponse,
 )
 
 router = APIRouter(prefix="/resource", tags=["resources"])
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/resource", tags=["resources"])
 async def get_folder_files(
     folder_path: str = Query(..., description="Полный путь к ресурсу"),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> FolderDetailResponse:
 
     folder = await FolderService.get_folder_with_children(
@@ -53,7 +53,7 @@ async def create_folder(
         description="Путь к родительской папке (оставьте пустым для корня)",
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
 
     if not parent_path:
@@ -71,7 +71,7 @@ async def upload_file(
     folder_path: str = Query(..., description="Путь к папке, в которую загружаем"),
     file: UploadFile = FastAPIFile(...),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     new_file = await FileService.create_file(
         folder_path, current_user.user_id, db, file
@@ -84,7 +84,7 @@ async def upload_file(
 async def delete_resource(
     path: str = Query(..., description="Полный путь к ресурсу"),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     is_folder = path.endswith("/")
 
@@ -101,7 +101,7 @@ async def rename_resource(
     from_path: str = Query(..., description="Старый путь"),
     to_path: str = Query(..., description="Новый путь"),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     is_folder = from_path.endswith("/")
 
@@ -117,7 +117,7 @@ async def rename_resource(
 async def find_files(
     query: str = Query(..., min_length=2, description="Строка для поиска"),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> list[FileFilterResponse]:
 
     all_files = await FolderService.find_files(query, current_user.user_id, db)
@@ -134,7 +134,7 @@ async def find_files(
 async def download_file(
     path: str = Query(..., description="Путь к файлу"),
     db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     is_folder = path.endswith("/")
 

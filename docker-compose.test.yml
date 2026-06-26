@@ -1,0 +1,53 @@
+services:
+  db_test:
+    image: postgres:16-alpine
+    container_name: fastapi_db_test
+    environment:
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-fastapi_db_test}
+      POSTGRES_USER: ${TEST_POSTGRES_USER:-fastapi_user_test}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-fastapi_pass_test}
+    ports:
+      - "5434:5432"  
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_POSTGRES_USER:-fastapi_user_test} -d ${TEST_POSTGRES_DB:-fastapi_db_test}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_test:
+    image: redis:7-alpine
+    container_name: fastapi_redis_test
+    ports:
+      - "6380:6379"  
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio_test:
+    image: minio/minio:latest
+    container_name: fastapi_minio_test
+    ports:
+      - "9002:9000"   
+      - "9003:9001"   
+    environment:
+      MINIO_ROOT_USER: ${TEST_MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${TEST_MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_test_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+  minio_test_data:

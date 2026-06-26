@@ -45,7 +45,7 @@ async def register(
     }
     await create_session(response, session_data)
 
-    return UserResponse.model_validate(new_user)
+    return UserResponse(user_id=new_user.id, username=new_user.username)
 
 
 @router.post("/login", response_model=UserResponse)
