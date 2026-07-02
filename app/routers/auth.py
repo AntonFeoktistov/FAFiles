@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,9 @@ from ..schemas import SessionData, UserCreate, UserLogin, UserResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/sign-up", response_model=UserResponse)
+@router.post(
+    "/sign-up", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def register(
     user_data: UserCreate, response: Response, db: AsyncSession = Depends(get_db)
 ):
@@ -47,7 +49,7 @@ async def register(
     )
 
     session_data = SessionData(user_id=new_user.id, username=new_user.username)
-    create_session(response, session_data)
+    await create_session(response, session_data)
 
     return UserResponse(username=new_user.username)
 

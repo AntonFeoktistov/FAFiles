@@ -5,19 +5,22 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import pytest
+
 from dotenv import load_dotenv
+
+load_dotenv(".env.test")
+import pytest
 from fastapi import Response
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-load_dotenv(".env.test")
 from app.auth import create_session, get_current_user, hash_password
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
 from app.redis_client import redis_client
+from app.schemas import SessionData
 
 TEST_DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 
@@ -111,10 +114,7 @@ async def test_folder(test_user: User, db_session: AsyncSession):
 @pytest.fixture(scope="function")
 async def auth_client(client: AsyncClient, test_user: User):
     response = Response()
-    session_data = {
-        "user_id": test_user.id,
-        "username": test_user.username,
-    }
+    session_data = SessionData(user_id=test_user.id, username=test_user.username)
     await create_session(response, session_data)
 
     cookie_header = response.headers.get("set-cookie", "")
