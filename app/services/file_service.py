@@ -143,7 +143,7 @@ class FileService:
         except S3Error as e:
             raise HTTPException(500, f"MinIO operation failed: {e}")
 
-        file.file_path = to_path
+        file.full_path = to_path
         file.name = to_path.split("/")[-1]
 
         await db.commit()
@@ -192,6 +192,6 @@ class FileService:
     ) -> Optional[File]:
 
         result = await db.execute(
-            select(File).where(File.user_id == user_id, File.file_path == file_path)
+            select(File).where(File.user_id == user_id, File.full_path == file_path)
         )
         return result.scalar_one_or_none()

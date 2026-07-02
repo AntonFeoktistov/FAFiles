@@ -65,7 +65,7 @@ class File(Base):
     folder_id: Mapped[int] = mapped_column(
         ForeignKey("folders.id"), nullable=False, index=True
     )
-    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    full_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="files")

@@ -110,8 +110,8 @@ class FolderService:
 
         await db.execute(
             update(File)
-            .where(File.user_id == user_id, File.file_path.startswith(from_prefix_db))
-            .values(file_path=func.replace(File.file_path, from_path, to_path))
+            .where(File.user_id == user_id, File.full_path.startswith(from_prefix_db))
+            .values(file_path=func.replace(File.full_path, from_path, to_path))
         )
 
         folder.full_path = to_path
@@ -173,7 +173,7 @@ class FolderService:
 
         files_query = await db.execute(
             select(File).where(
-                File.user_id == user_id, File.file_path.startswith(folder_path)
+                File.user_id == user_id, File.full_path.startswith(folder_path)
             )
         )
         all_files = files_query.scalars().all()

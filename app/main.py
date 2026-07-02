@@ -1,7 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import HTTPException, RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.exceptions import (
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from app.routers import resources
 
 from .database import Base, engine
@@ -28,5 +35,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(auth.router)
-app.include_router(resources.router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(resources.router, prefix="/api")
+
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)

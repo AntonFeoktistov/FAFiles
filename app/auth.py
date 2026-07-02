@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request, Response
 
 from .config import settings
 from .redis_client import redis_client
-from .schemas import UserResponse
+from .schemas import SessionData, UserCreate, UserResponse
 
 
 def hash_password(password: str) -> str:
@@ -25,11 +25,11 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-async def create_session(response: Response, user_data: dict) -> str:
+async def create_session(response: Response, user_data: SessionData) -> str:
     session_id = str(uuid.uuid4())
     session_key = f"session:{session_id}"
-
-    await redis_client.set_session(session_key, user_data, settings.SESSION_TTL)
+    data = user_data.model_dump()
+    await redis_client.set_session(session_key, data, settings.SESSION_TTL)
 
     response.set_cookie(
         key="session_id",
@@ -84,3 +84,15 @@ async def logout_user(request: Request, response: Response):
     if session_id:
         await delete_session(session_id)
     response.delete_cookie("session_id", path="/")
+
+
+async def validate_register_data(user_data: UserCreate):
+    if len(user_data.username) < 2:
+        return False
+    if len(user_data.username) > 20:
+        return False
+    if len(user_data.password) < 2:
+        return False
+    if len(user_data.password) > 20:
+        return False
+    return True

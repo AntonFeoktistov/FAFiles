@@ -37,7 +37,7 @@ async def get_folder_files(
         subfolders.append(subfolder_data)
 
     for file in folder.files:
-        file_data = FileResponse(path=file.file_path, name=file.name)
+        file_data = FileResponse(path=file.full_path, name=file.name)
         files.append(file_data)
 
     return FolderDetailResponse(
@@ -77,7 +77,7 @@ async def upload_file(
         folder_path, current_user.user_id, db, file
     )
 
-    return FileResponse(path=new_file.file_path, name=new_file.name, size=file.size)
+    return FileResponse(path=new_file.full_path, name=new_file.name, size=file.size)
 
 
 @router.delete("/", status_code=204)
@@ -123,7 +123,7 @@ async def find_files(
     all_files = await FolderService.find_files(query, current_user.user_id, db)
     files = []
     for file in all_files:
-        folder_path = "/".join(file.file_path.split("/")[:-1]) + "/"
+        folder_path = "/".join(file.full_path.split("/")[:-1]) + "/"
         file_data = FileFilterResponse(folder_path=folder_path, name=file.name)
         files.append(file_data)
 

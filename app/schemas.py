@@ -14,7 +14,6 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModel):
-    user_id: int
     username: str
 
     model_config = ConfigDict(from_attributes=True)
