@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, Query, UploadFile
-from fastapi import File as FastAPIFile
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.file_service import FileService
@@ -8,139 +7,166 @@ from app.services.folder_service import FolderService
 from ..auth import get_current_user
 from ..database import get_db
 from ..schemas import (
-    FileFilterResponse,
-    FileResponse,
     FolderDetailResponse,
-    FolderResponse,
-    UserResponse,
+    ResourceResponse,
+    SessionData,
 )
 
+FOLDER_TYPE = "DIRECTORY"
+FILE_TYPE = "FILE"
 router = APIRouter(prefix="/resource", tags=["resources"])
 
 
 @router.get("/")
-async def get_folder_files(
-    folder_path: str = Query(..., description="Полный путь к ресурсу"),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-) -> FolderDetailResponse:
-
-    folder = await FolderService.get_folder_with_children(
-        folder_path, current_user.user_id, db
-    )
-
-    subfolders = []
-    files = []
-
-    for subfolder in folder.subfolders:
-        subfolder_data = FolderResponse(path=subfolder.full_path, name=subfolder.name)
-        subfolders.append(subfolder_data)
-
-    for file in folder.files:
-        file_data = FileResponse(path=file.full_path, name=file.name)
-        files.append(file_data)
-
-    return FolderDetailResponse(
-        subfolders=subfolders, files=files, path=folder.full_path, name=folder.name
-    )
-
-
-@router.post("/create-folder", status_code=201, response_model=FolderResponse)
-async def create_folder(
-    name: str = Query(..., description="Имя папки"),
-    parent_path: str | None = Query(
-        default=None,
-        description="Путь к родительской папке (оставьте пустым для корня)",
-    ),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-):
-
-    if not parent_path:
-        parent_path = f"/{current_user.username}-files/"
-
-    new_folder = await FolderService.create_folder(
-        name=name, parent_path=parent_path, user_id=current_user.user_id, db=db
-    )
-
-    return FolderResponse(path=parent_path, name=name, type="DIRECTORY")
-
-
-@router.post("/create-file", status_code=201)
-async def upload_file(
-    folder_path: str = Query(..., description="Путь к папке, в которую загружаем"),
-    file: UploadFile = FastAPIFile(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-):
-    new_file = await FileService.create_file(
-        folder_path, current_user.user_id, db, file
-    )
-
-    return FileResponse(path=new_file.full_path, name=new_file.name, size=file.size)
-
-
-@router.delete("/", status_code=204)
-async def delete_resource(
+async def get_resource(
     path: str = Query(..., description="Полный путь к ресурсу"),
     db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-):
-    is_folder = path.endswith("/")
+    current_user: SessionData = Depends(get_current_user),
+) -> FolderDetailResponse:
 
-    if is_folder:
-        await FolderService.delete_folder(path, current_user.user_id, db)
-    if not is_folder:
-        await FileService.delete_file(path, current_user.user_id, db)
+    if path.endswith("/"):
+        type = FILE_TYPE
+    else:
+        type = FOLDER_TYPE
 
-    return {"message": "Resource deleted"}
+    if type == FOLDER_TYPE:
+        resource = await FolderService.get_folder_only(path, current_user.user_id, db)
 
-
-@router.post("/rename")
-async def rename_resource(
-    from_path: str = Query(..., description="Старый путь"),
-    to_path: str = Query(..., description="Новый путь"),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-):
-    is_folder = from_path.endswith("/")
-
-    if is_folder:
-        await FolderService.rename_folder(from_path, to_path, current_user.user_id, db)
-    if not is_folder:
-        await FileService.rename_file(from_path, to_path, current_user.user_id, db)
-
-    return {"message": "Resource moved"}
+    if type == FILE_TYPE:
+        resource = await FileService.get_file_by_path(path, current_user.user_id, db)
+    if "size" in resource:
+        response = ResourceResponse(
+            path=resource.full_path, name=resource.name, size=resource.size, type=type
+        )
+    else:
+        response = ResourceResponse(
+            path=resource.full_path, name=resource.name, type=type
+        )
 
 
-@router.get("/search")
-async def find_files(
-    query: str = Query(..., min_length=2, description="Строка для поиска"),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-) -> list[FileFilterResponse]:
+# @router.get("/")
+# async def get_folder_files(
+#     folder_path: str = Query(..., description="Полный путь к ресурсу"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ) -> FolderDetailResponse:
 
-    all_files = await FolderService.find_files(query, current_user.user_id, db)
-    files = []
-    for file in all_files:
-        folder_path = "/".join(file.full_path.split("/")[:-1]) + "/"
-        file_data = FileFilterResponse(folder_path=folder_path, name=file.name)
-        files.append(file_data)
+#     folder = await FolderService.get_folder_with_children(
+#         folder_path, current_user.user_id, db
+#     )
 
-    return files
+#     subfolders = []
+#     files = []
+
+#     for subfolder in folder.subfolders:
+#         subfolder_data = FolderResponse(path=subfolder.full_path, name=subfolder.name)
+#         subfolders.append(subfolder_data)
+
+#     for file in folder.files:
+#         file_data = FileResponse(path=file.full_path, name=file.name)
+#         files.append(file_data)
+
+#     return FolderDetailResponse(
+#         subfolders=subfolders, files=files, path=folder.full_path, name=folder.name
+#     )
 
 
-@router.get("/download")
-async def download_file(
-    path: str = Query(..., description="Путь к файлу"),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
-):
-    is_folder = path.endswith("/")
+# @router.post("/create-folder", status_code=201, response_model=FolderResponse)
+# async def create_folder(
+#     name: str = Query(..., description="Имя папки"),
+#     parent_path: str | None = Query(
+#         default=None,
+#         description="Путь к родительской папке (оставьте пустым для корня)",
+#     ),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ):
 
-    if is_folder:
-        response = await FolderService.download_folder(path, current_user.user_id, db)
+#     if not parent_path:
+#         parent_path = f"/{current_user.username}-files/"
 
-    if not is_folder:
-        response = await FileService.download_file(path, current_user.user_id, db)
-    return response
+#     new_folder = await FolderService.create_folder(
+#         name=name, parent_path=parent_path, user_id=current_user.user_id, db=db
+#     )
+
+#     return FolderResponse(path=parent_path, name=name, type="DIRECTORY")
+
+
+# @router.post("/create-file", status_code=201)
+# async def upload_file(
+#     folder_path: str = Query(..., description="Путь к папке, в которую загружаем"),
+#     file: UploadFile = FastAPIFile(...),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ):
+#     new_file = await FileService.create_file(
+#         folder_path, current_user.user_id, db, file
+#     )
+
+#     return FileResponse(path=new_file.full_path, name=new_file.name, size=file.size)
+
+
+# @router.delete("/", status_code=204)
+# async def delete_resource(
+#     path: str = Query(..., description="Полный путь к ресурсу"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ):
+#     is_folder = path.endswith("/")
+
+#     if is_folder:
+#         await FolderService.delete_folder(path, current_user.user_id, db)
+#     if not is_folder:
+#         await FileService.delete_file(path, current_user.user_id, db)
+
+#     return {"message": "Resource deleted"}
+
+
+# @router.post("/rename")
+# async def rename_resource(
+#     from_path: str = Query(..., description="Старый путь"),
+#     to_path: str = Query(..., description="Новый путь"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ):
+#     is_folder = from_path.endswith("/")
+
+#     if is_folder:
+#         await FolderService.rename_folder(from_path, to_path, current_user.user_id, db)
+#     if not is_folder:
+#         await FileService.rename_file(from_path, to_path, current_user.user_id, db)
+
+#     return {"message": "Resource moved"}
+
+
+# @router.get("/search")
+# async def find_files(
+#     query: str = Query(..., min_length=2, description="Строка для поиска"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ) -> list[FileFilterResponse]:
+
+#     all_files = await FolderService.find_files(query, current_user.user_id, db)
+#     files = []
+#     for file in all_files:
+#         folder_path = "/".join(file.full_path.split("/")[:-1]) + "/"
+#         file_data = FileFilterResponse(folder_path=folder_path, name=file.name)
+#         files.append(file_data)
+
+#     return files
+
+
+# @router.get("/download")
+# async def download_file(
+#     path: str = Query(..., description="Путь к файлу"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: UserResponse = Depends(get_current_user),
+# ):
+#     is_folder = path.endswith("/")
+
+#     if is_folder:
+#         response = await FolderService.download_folder(path, current_user.user_id, db)
+
+#     if not is_folder:
+#         response = await FileService.download_file(path, current_user.user_id, db)
+#     return response

@@ -56,6 +56,18 @@ class FolderService:
         return new_folder
 
     @staticmethod
+    async def get_or_create_folder_by_path(
+        path: str, user_id: int, db: AsyncSession
+    ) -> Folder:
+
+        folder = FolderService.get_folder_only(path, user_id, db)
+        if not folder:
+            name, parent_path = FolderService._get_folder_parts(path)
+            folder = FolderService.create_folder(name, parent_path, user_id, db)
+
+        return folder
+
+    @staticmethod
     async def delete_folder(folder_path: str, user_id: int, db: AsyncSession) -> bool:
 
         folder = FolderService.get_folder_with_children(folder_path, user_id, db)
@@ -78,10 +90,10 @@ class FolderService:
         from_path: str, to_path: str, user_id: int, db: AsyncSession
     ) -> bool:
 
-        folder = await FolderService._get_folder_only(from_path, user_id, db)
+        folder = await FolderService.get_folder_only(from_path, user_id, db)
 
         try:
-            await FolderService._get_folder_only(to_path, user_id, db)
+            await FolderService.get_folder_only(to_path, user_id, db)
             raise HTTPException(409, "Folder already exists")
         except HTTPException:
             pass
@@ -123,7 +135,7 @@ class FolderService:
         return True
 
     @staticmethod
-    async def _get_folder_only(
+    async def get_folder_only(
         folder_path: str, user_id: int, db: AsyncSession
     ) -> Folder:
 
@@ -167,7 +179,7 @@ class FolderService:
     @staticmethod
     async def download_folder(folder_path: str, user_id: int, db: AsyncSession):
 
-        folder = await FolderService._get_folder_only(folder_path, user_id, db)
+        folder = await FolderService.get_folder_only(folder_path, user_id, db)
         if not folder:
             raise HTTPException(404, "Folder not found")
 
@@ -249,6 +261,14 @@ class FolderService:
             "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }
         return types.get(ext, "application/octet-stream")
+
+    @staticmethod
+    async def _get_folder_parts(full_path: str):
+        path = full_path[:-1]
+        path_parts = path.split("/")
+        folder_name = path_parts[-1]
+        parent_path = "/".join(path_parts[:-1]) if len(path_parts) > 1 else ""
+        return (folder_name, parent_path)
 
 
 async def load_all_children(folder: Folder, db: AsyncSession):

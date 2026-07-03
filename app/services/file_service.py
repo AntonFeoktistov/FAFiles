@@ -11,6 +11,10 @@ from minio.commonconfig import CopySource
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.routers.resources import FILE_TYPE
+from app.schemas import ResourceResponse
+from app.services.folder_service import FolderService
+
 from ..models import File, Folder
 
 load_dotenv()
@@ -30,6 +34,43 @@ if not minio_client.bucket_exists(BUCKET_NAME):
 
 
 class FileService:
+    @staticmethod
+    async def upload_resources(
+        root_path: str,
+        user_id: int,
+        db: AsyncSession,
+        files: list[UploadFile],
+    ) -> list[ResourceResponse]:
+
+        uploaded = []
+
+        for file in files:
+            if not file.filename:
+                continue
+            file_name, subfolder_path = FileService._get_parts(file.filename)
+
+            full_folder_path = (
+                f"{root_path}{subfolder_path}/" if subfolder_path else root_path
+            )
+
+            folder = await FolderService.get_or_create_folder_by_path(
+                path=full_folder_path, user_id=user_id, db=db
+            )
+
+            file = FileService.create_file(folder.full_path, user_id, db, file)
+
+            uploaded.append(
+                ResourceResponse(
+                    path=folder.full_path,
+                    name=file.name,
+                    size=file.size,
+                    type=FILE_TYPE,
+                )
+            )
+
+        await db.commit()
+        return uploaded
+
     @staticmethod
     async def create_file(
         folder_path: str,
@@ -67,6 +108,7 @@ class FileService:
             name=file.filename,
             folder_id=folder.id,
             file_path=full_path,
+            size=upload_result.size,
         )
 
         db.add(new_file)
@@ -109,7 +151,7 @@ class FileService:
     @staticmethod
     async def delete_file(file_path: str, user_id: int, db: AsyncSession) -> bool:
 
-        file = await FileService._get_file_by_path(file_path, user_id, db)
+        file = await FileService.get_file_by_path(file_path, user_id, db)
         if not file:
             raise HTTPException(404, "File not found")
 
@@ -128,11 +170,11 @@ class FileService:
         from_path: str, to_path: str, user_id: int, db: AsyncSession
     ) -> File:
 
-        file = await FileService._get_file_by_path(from_path, user_id, db)
+        file = await FileService.get_file_by_path(from_path, user_id, db)
         if not file:
             raise HTTPException(404, "File not found")
 
-        existing_file = await FileService._get_file_by_path(to_path, user_id, db)
+        existing_file = await FileService.get_file_by_path(to_path, user_id, db)
         if existing_file:
             raise HTTPException(409, "File already exists at target path")
 
@@ -154,7 +196,7 @@ class FileService:
     @staticmethod
     async def download_file(file_path: str, user_id: int, db: AsyncSession):
 
-        file_obj = await FileService._get_file_by_path(file_path, user_id, db)
+        file_obj = await FileService.get_file_by_path(file_path, user_id, db)
         if not file_obj:
             raise HTTPException(404, "File not found")
 
@@ -187,7 +229,7 @@ class FileService:
             raise HTTPException(500, f"MinIO error: {e}")
 
     @staticmethod
-    async def _get_file_by_path(
+    async def get_file_by_path(
         file_path: str, user_id: int, db: AsyncSession
     ) -> Optional[File]:
 
@@ -195,3 +237,10 @@ class FileService:
             select(File).where(File.user_id == user_id, File.full_path == file_path)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def _get_parts(filename: str):
+        path_parts = filename.split("/")
+        file_name = path_parts[-1]
+        subfolder_path = "/".join(path_parts[:-1]) if len(path_parts) > 1 else ""
+        return (file_name, subfolder_path)

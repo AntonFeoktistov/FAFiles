@@ -24,6 +24,13 @@ class SessionData(BaseModel):
     username: str
 
 
+class ResourceResponse(BaseModel):
+    path: str
+    name: str
+    size: str | None
+    type: str
+
+
 class FolderResponse(BaseModel):
     path: str
     name: str

@@ -67,6 +67,7 @@ class File(Base):
     )
     full_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    size: Mapped[int] = mapped_column(Integer, nullable=True, default=0)
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="files")
     folder: Mapped["Folder"] = relationship("Folder", back_populates="files")
