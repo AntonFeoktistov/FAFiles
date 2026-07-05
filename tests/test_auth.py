@@ -9,13 +9,13 @@ from app.models import User
 async def test_register_success(client, db_session: AsyncSession):
     response = await client.post(
         "api/auth/sign-up",
-        json={"username": "newuser", "password": "newpass"},
+        json={"username": "newuser2", "password": "newpass2"},
     )
-    result = await db_session.execute(select(User).where(User.username == "newuser"))
+    result = await db_session.execute(select(User).where(User.username == "newuser2"))
     user = result.scalar_one_or_none()
     assert user is not None
     assert response.status_code == status.HTTP_201_CREATED
-    assert response.json()["username"] == "newuser"
+    assert response.json()["username"] == "newuser2"
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,8 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict
 
+from app.config import ResourceType
+
 
 class UserCreate(BaseModel):
     username: str
@@ -27,8 +29,8 @@ class SessionData(BaseModel):
 class ResourceResponse(BaseModel):
     path: str
     name: str
-    size: str | None
-    type: str
+    size: int | None
+    type: ResourceType | str
 
 
 class FolderResponse(BaseModel):

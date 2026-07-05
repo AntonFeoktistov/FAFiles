@@ -1,3 +1,4 @@
+from enum import Enum
 from functools import lru_cache
 from typing import Optional
 
@@ -38,3 +39,8 @@ def get_settings():
 
 
 settings = get_settings()
+
+
+class ResourceType(str, Enum):
+    FOLDER = "DIRECTORY"
+    FILE = "FILE"

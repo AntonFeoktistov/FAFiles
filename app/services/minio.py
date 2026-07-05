@@ -1,0 +1,25 @@
+import os
+
+from dotenv import load_dotenv
+from minio import Minio
+
+load_dotenv()
+
+
+def _make_minio_client():
+    minio_client = Minio(
+        endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000")
+        .replace("http://", "")
+        .replace("https://", ""),
+        access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+        secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+        secure=os.getenv("MINIO_USE_SSL", "false").lower() == "true",
+    )
+    return minio_client
+
+
+BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "user-files")
+minio_client = _make_minio_client()
+
+if not minio_client.bucket_exists(BUCKET_NAME):
+    minio_client.make_bucket(BUCKET_NAME)

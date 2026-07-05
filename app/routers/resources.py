@@ -1,47 +1,77 @@
-from fastapi import APIRouter, Depends, Query
+from urllib.parse import unquote
+
+from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi import File as FastAPIFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.file_service import FileService
-from app.services.folder_service import FolderService
+from app.services.storage import StorageService
 
 from ..auth import get_current_user
 from ..database import get_db
 from ..schemas import (
-    FolderDetailResponse,
-    ResourceResponse,
     SessionData,
 )
 
-FOLDER_TYPE = "DIRECTORY"
-FILE_TYPE = "FILE"
 router = APIRouter(prefix="/resource", tags=["resources"])
 
 
-@router.get("/")
-async def get_resource(
-    path: str = Query(..., description="Полный путь к ресурсу"),
+# @router.get("/resource")
+# async def get_resource(
+#     path: str = Query(..., description="Полный путь к ресурсу"),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: SessionData = Depends(get_current_user),
+# ) -> FolderDetailResponse:
+
+#     if path.endswith("/"):
+#         type = ResourceType.FILE_TYPE
+#     else:
+#         type = ResourceType.FOLDER_TYPE
+
+#     if type == ResourceType.FOLDER_TYPE:
+#         resource = await FolderService.get_folder_only(path, current_user.user_id, db)
+
+#     if type == ResourceType.FILE_TYPE:
+#         resource = await FileService.get_file_by_path(path, current_user.user_id, db)
+
+#     try:
+#         size = resource.size
+#     except AttributeError:
+#         size = None
+
+#     return ResourceResponse(
+#             path=resource.full_path, name=resource.name, size=size, type=type
+#         )
+
+
+router = APIRouter()
+
+
+@router.post("/resource", status_code=status.HTTP_201_CREATED)
+async def upload_resources(
+    path: str = Query(...),
+    files: list[UploadFile] = FastAPIFile(
+        ..., description="Несколько файлов (для фронта)"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: SessionData = Depends(get_current_user),
-) -> FolderDetailResponse:
+):
 
-    if path.endswith("/"):
-        type = FILE_TYPE
-    else:
-        type = FOLDER_TYPE
+    decoded_path = unquote(path)
+    storage = StorageService(current_user.user_id, db)
+    return await storage.upload_resources(decoded_path, files)
 
-    if type == FOLDER_TYPE:
-        resource = await FolderService.get_folder_only(path, current_user.user_id, db)
 
-    if type == FILE_TYPE:
-        resource = await FileService.get_file_by_path(path, current_user.user_id, db)
-    if "size" in resource:
-        response = ResourceResponse(
-            path=resource.full_path, name=resource.name, size=resource.size, type=type
-        )
-    else:
-        response = ResourceResponse(
-            path=resource.full_path, name=resource.name, type=type
-        )
+@router.post("/resource-swagger", status_code=status.HTTP_201_CREATED)
+async def upload_resources_swagger(
+    path: str = Query(...),
+    file: UploadFile = FastAPIFile(..., description="Один файл (для Swagger)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+):
+    upload_files = [file]
+    decoded_path = unquote(path)
+    storage = StorageService(current_user.user_id, db)
+    return await storage.upload_resources(decoded_path, upload_files)
 
 
 # @router.get("/")

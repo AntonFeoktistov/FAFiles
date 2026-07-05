@@ -1,0 +1,183 @@
+import io
+import zipfile
+from tempfile import SpooledTemporaryFile
+from typing import List, Optional
+
+from fastapi import HTTPException, UploadFile
+from minio import S3Error
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import ResourceType
+from app.models import File, Folder
+from app.schemas import ResourceResponse
+from app.services import utils
+from app.services.minio import BUCKET_NAME, minio_client
+from app.services.repository import StorageRepository
+
+
+class StorageService:
+    def __init__(self, user_id: int, db: AsyncSession):
+        self.user_id = user_id
+        self.db = db
+        self.repo = StorageRepository(user_id, db)
+        self.minio_client = minio_client
+        self.BUCKET_NAME = BUCKET_NAME
+
+    async def upload_resources(
+        self,
+        root_path: str,
+        files: List[UploadFile],
+    ) -> List[ResourceResponse]:
+        if not files:
+            raise HTTPException(status_code=400, detail="No files provided")
+        root_path = utils.normalize_path(root_path)
+        root_folder = await self.repo.get_folder_or_none(root_path)
+        if not root_folder:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Родительская папка не найдена: {root_path}",
+            )
+        entries = await self._expand_upload_files(files)
+        created_folders: dict[str, Folder] = {}
+        file_results: list[ResourceResponse] = []
+        uploaded_minio_paths: list[str] = []
+        try:
+            for upload_file in entries:
+                relative_path = self._parse_relative_path(upload_file.filename)
+                file_name, parent_rel = utils.get_resource_name_and_parent_path(
+                    relative_path
+                )
+                folder_path = (
+                    utils.normalize_path(f"{root_path}{parent_rel}")
+                    if parent_rel
+                    else root_path
+                )
+                folder, new_folders = await self.repo.ensure_folder_path(folder_path)
+                for new_folder in new_folders:
+                    created_folders[new_folder.full_path] = new_folder
+                file_path = f"{folder.full_path}{file_name}"
+                existing_file = await self.repo.get_file_or_none(file_path)
+                if existing_file:
+                    raise HTTPException(status_code=409, detail="File already exists")
+                file_size = await self._upload_file_and_get_size(upload_file, file_path)
+                uploaded_minio_paths.append(file_path)
+                self.db.add(
+                    File(
+                        user_id=self.user_id,
+                        name=file_name,
+                        folder_id=folder.id,
+                        full_path=file_path,
+                        size=file_size,
+                    )
+                )
+                file_results.append(
+                    ResourceResponse(
+                        path=folder.full_path,
+                        name=file_name,
+                        size=file_size,
+                        type=ResourceType.FILE,
+                    )
+                )
+            await self.db.commit()
+        except HTTPException:
+            await self.db.rollback()
+            self._cleanup_minio_objects(uploaded_minio_paths)
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            self._cleanup_minio_objects(uploaded_minio_paths)
+            raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+        folder_results = [
+            self._folder_to_response(folder)
+            for folder in sorted(
+                created_folders.values(), key=lambda f: f.full_path.count("/")
+            )
+        ]
+        return folder_results + file_results
+
+    async def create_folder(self, name: str, parent_path: str) -> Folder:
+        parent_path = utils.normalize_path(parent_path) if parent_path else ""
+        folder_path = utils.normalize_path(f"{parent_path}{name.strip('/')}/")
+        folder, _ = await self.repo.ensure_folder_path(folder_path)
+        await self.db.commit()
+        await self.db.refresh(folder)
+        return folder
+
+    async def _upload_file_and_get_size(
+        self,
+        file: UploadFile,
+        file_path: str,
+        content_type: Optional[str] = None,
+    ) -> int:
+        try:
+            content = await file.read()
+            file_size = len(content)
+
+            if not content_type:
+                content_type = file.content_type or "application/octet-stream"
+
+            self.minio_client.put_object(
+                bucket_name=self.BUCKET_NAME,
+                object_name=file_path,
+                data=io.BytesIO(content),
+                length=file_size,
+                content_type=content_type,
+            )
+
+            return file_size
+        except S3Error as e:
+            raise HTTPException(status_code=500, detail=f"MinIO upload error: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
+    def _folder_to_response(self, folder: Folder) -> ResourceResponse:
+        name, parent_path = utils.get_resource_name_and_parent_path(folder.full_path)
+        return ResourceResponse(
+            path=parent_path,
+            name=name,
+            size=None,
+            type=ResourceType.FOLDER,
+        )
+
+    def _parse_relative_path(self, filename: str | None) -> str:
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        try:
+            return utils.normalize_relative_path(filename)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+    async def _expand_upload_files(self, files: List[UploadFile]) -> List[UploadFile]:
+        if (
+            len(files) == 1
+            and files[0].filename
+            and files[0].filename.lower().endswith(".zip")
+        ):
+            return await self._zip_to_upload_files(files[0])
+        return files
+
+    async def _zip_to_upload_files(self, zip_file: UploadFile) -> List[UploadFile]:
+        content = await zip_file.read()
+        zip_buffer = io.BytesIO(content)
+        entries: list[UploadFile] = []
+
+        with zipfile.ZipFile(zip_buffer, "r") as zf:
+            for file_info in zf.filelist:
+                if file_info.is_dir():
+                    continue
+                file_content = zf.read(file_info.filename)
+                temp = SpooledTemporaryFile()
+                temp.write(file_content)
+                temp.seek(0)
+                entries.append(UploadFile(filename=file_info.filename, file=temp))
+
+        if not entries:
+            raise HTTPException(status_code=400, detail="ZIP archive is empty")
+        return entries
+
+    def _cleanup_minio_objects(self, object_paths: list[str]) -> None:
+        for object_path in object_paths:
+            try:
+                self.minio_client.remove_object(self.BUCKET_NAME, object_path)
+            except S3Error:
+                pass
