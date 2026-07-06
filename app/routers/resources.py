@@ -5,7 +5,7 @@ from fastapi import File as FastAPIFile
 
 from app import schemas
 from app.services import utils
-from app.services.storage import StorageService, get_storage_service
+from app.services.main_service import StorageService, get_storage_service
 
 from ..schemas import (
     ResourceResponse,
@@ -20,7 +20,7 @@ async def get_resource(
     storage: StorageService = Depends(get_storage_service),
 ) -> ResourceResponse:
 
-    resource = storage.get_resource(path)
+    resource = await storage.get_resource(path)
     if utils.is_resource_folder(resource.full_path):
         return schemas.folder_to_response(resource)
     return schemas.file_to_response(resource)
@@ -54,6 +54,21 @@ async def download_resource(
 ):
     decoded_path = unquote(path)
     return await storage.download_resource(decoded_path)
+
+
+@router.post("/resource/move", status_code=status.HTTP_201_CREATED)
+async def move_resource(
+    from_path: str = Query(..., alias="from", description="Откуда перемещение"),
+    to_path: str = Query(..., alias="to", description="Куда перемещение"),
+    storage: StorageService = Depends(get_storage_service),
+):
+    path_from = unquote(from_path)
+    path_to = unquote(to_path)
+    resource = await storage.move_resource(path_from, path_to)
+    if utils.is_resource_folder(resource.full_path):
+        return schemas.folder_to_response(resource)
+    else:
+        return schemas.file_to_response(resource)
 
 
 @router.post("/resource-swagger", status_code=status.HTTP_201_CREATED)

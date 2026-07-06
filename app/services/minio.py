@@ -33,3 +33,11 @@ async def is_file_exists(file_path: str) -> bool:
         if e.code == "NoSuchKey":
             return False
         raise
+
+
+async def cleanup_minio_objects(object_paths: list[str]) -> None:
+    for object_path in object_paths:
+        try:
+            minio_client.remove_object(BUCKET_NAME, object_path)
+        except S3Error:
+            pass

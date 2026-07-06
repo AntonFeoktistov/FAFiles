@@ -1,4 +1,9 @@
-from fastapi import HTTPException
+import io
+import zipfile
+from tempfile import SpooledTemporaryFile
+from typing import List
+
+from fastapi import HTTPException, UploadFile
 
 
 def is_resource_folder(path):
@@ -59,6 +64,25 @@ def get_resource_name_and_parent_path(full_path: str):
     return (name, parent)
 
 
+def parse_relative_path(filename: str | None) -> str:
+    if not filename:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    try:
+        return normalize_relative_path(filename)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+
+async def expand_upload_files(files: List[UploadFile]) -> List[UploadFile]:
+    if (
+        len(files) == 1
+        and files[0].filename
+        and files[0].filename.lower().endswith(".zip")
+    ):
+        return await _zip_to_upload_files(files[0])
+    return files
+
+
 def get_content_type(filename: str) -> str:
     ext = filename.split(".")[-1].lower() if "." in filename else ""
     types = {
@@ -88,3 +112,23 @@ def get_content_type(filename: str) -> str:
         "js": "application/javascript",
     }
     return types.get(ext, "application/octet-stream")
+
+
+async def _zip_to_upload_files(zip_file: UploadFile) -> List[UploadFile]:
+    content = await zip_file.read()
+    zip_buffer = io.BytesIO(content)
+    entries: list[UploadFile] = []
+
+    with zipfile.ZipFile(zip_buffer, "r") as zf:
+        for file_info in zf.filelist:
+            if file_info.is_dir():
+                continue
+            file_content = zf.read(file_info.filename)
+            temp = SpooledTemporaryFile()
+            temp.write(file_content)
+            temp.seek(0)
+            entries.append(UploadFile(filename=file_info.filename, file=temp))
+
+    if not entries:
+        raise HTTPException(status_code=400, detail="ZIP archive is empty")
+    return entries

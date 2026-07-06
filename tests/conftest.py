@@ -21,7 +21,7 @@ from app.main import app
 from app.models import User
 from app.redis_client import redis_client
 from app.schemas import SessionData
-from app.services.storage import StorageService
+from app.services.main_service import StorageService
 
 TEST_DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 
@@ -92,7 +92,7 @@ async def test_user(db_session: AsyncSession) -> User:
 
     storage = StorageService(user.id, db_session)
 
-    await storage.create_folder(name=f"{user.username}-files", parent_path="")
+    await storage.create.create_folder(name=f"{user.username}-files", parent_path="")
 
     return user
 
@@ -101,7 +101,7 @@ async def test_user(db_session: AsyncSession) -> User:
 async def test_folder(test_user: User, db_session: AsyncSession):
 
     storage = StorageService(test_user.id, db_session)
-    folder = await storage.create_folder(
+    folder = await storage.create.create_folder(
         name="documents", parent_path=f"{test_user.username}-files/"
     )
     return folder

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.storage import StorageService
+from app.services.main_service import StorageService
 
 from ..auth import (
     create_session,
@@ -45,7 +45,7 @@ async def register(
     await db.refresh(new_user)
 
     storage = StorageService(new_user.id, db)
-    root_folder = await storage.create_folder(
+    root_folder = await storage.create.create_folder(
         name=f"user-{new_user.id}-files", parent_path=""
     )
 

@@ -94,3 +94,19 @@ class StorageRepository:
             )
         )
         return query.scalars().all()
+
+    async def create_file_in_db(
+        self, folder_id: int, full_path: str, file_size: int
+    ) -> File:
+        file_name, _ = utils.get_resource_name_and_parent_path(full_path)
+        file = File(
+            user_id=self.user_id,
+            name=file_name,
+            folder_id=folder_id,
+            full_path=full_path,
+            size=file_size,
+        )
+        self.db.add(file)
+        await self.db.commit()
+        await self.db.refresh(file)
+        return file
