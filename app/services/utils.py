@@ -1,3 +1,10 @@
+from fastapi import HTTPException
+
+
+def is_resource_folder(path):
+    return path.endswith("/")
+
+
 def normalize_path(path: str) -> str:
     if not path:
         return ""
@@ -7,6 +14,28 @@ def normalize_path(path: str) -> str:
         path = path[1:]
     if not path.endswith("/"):
         path += "/"
+    return path
+
+
+def validate_path(path: str, param_name: str = "path") -> str:
+
+    if not path or not path.strip():
+        raise HTTPException(
+            status_code=400, detail=f"Параметр '{param_name}' не может быть пустым"
+        )
+    path = path.strip()
+    dangerous_chars = ["..", "\\", ":", "*", "?", '"', "<", ">", "|"]
+    for char in dangerous_chars:
+        if char in path:
+            raise HTTPException(
+                status_code=400, detail=f"Недопустимый символ '{char}' в пути"
+            )
+    if path.startswith("/") or path.startswith("\\"):
+        raise HTTPException(status_code=400, detail="Путь не должен начинаться с '/'")
+    if len(path) > 1024:
+        raise HTTPException(
+            status_code=400, detail="Путь слишком длинный (максимум 1024 символа)"
+        )
     return path
 
 

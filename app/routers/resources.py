@@ -1,49 +1,46 @@
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi import File as FastAPIFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import schemas
+from app.services import utils
+from app.services.repository import StorageRepository
 from app.services.storage import StorageService
 
 from ..auth import get_current_user
 from ..database import get_db
 from ..schemas import (
+    ResourceResponse,
     SessionData,
 )
 
-router = APIRouter(prefix="/resource", tags=["resources"])
-
-
-# @router.get("/resource")
-# async def get_resource(
-#     path: str = Query(..., description="Полный путь к ресурсу"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: SessionData = Depends(get_current_user),
-# ) -> FolderDetailResponse:
-
-#     if path.endswith("/"):
-#         type = ResourceType.FILE_TYPE
-#     else:
-#         type = ResourceType.FOLDER_TYPE
-
-#     if type == ResourceType.FOLDER_TYPE:
-#         resource = await FolderService.get_folder_only(path, current_user.user_id, db)
-
-#     if type == ResourceType.FILE_TYPE:
-#         resource = await FileService.get_file_by_path(path, current_user.user_id, db)
-
-#     try:
-#         size = resource.size
-#     except AttributeError:
-#         size = None
-
-#     return ResourceResponse(
-#             path=resource.full_path, name=resource.name, size=size, type=type
-#         )
-
-
 router = APIRouter()
+
+
+@router.get("/resource")
+async def get_resource(
+    path: str = Query(description="Полный путь к ресурсу"),
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+) -> ResourceResponse:
+
+    path = utils.validate_path(path)
+    repository = StorageRepository(current_user.user_id, db)
+    if utils.is_resource_folder(path):
+        resource = await repository.get_folder_or_none(path)
+    else:
+        resource = await repository.get_file_or_none(path)
+    if not resource:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ресурс {path} не найден",
+        )
+
+    if utils.is_resource_folder(resource.full_path):
+        return schemas.folder_to_response(resource)
+    return schemas.file_to_response(resource)
 
 
 @router.post("/resource", status_code=status.HTTP_201_CREATED)

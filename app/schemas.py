@@ -1,8 +1,8 @@
-from typing import List
-
 from pydantic import BaseModel, ConfigDict
 
 from app.config import ResourceType
+from app.models import File, Folder
+from app.services import utils
 
 
 class UserCreate(BaseModel):
@@ -45,11 +45,21 @@ class FileResponse(BaseModel):
     type: str = "FILE"
 
 
-class FileFilterResponse(BaseModel):
-    folder_path: str
-    name: str
+def folder_to_response(folder: Folder) -> ResourceResponse:
+    name, parent_path = utils.get_resource_name_and_parent_path(folder.full_path)
+    return ResourceResponse(
+        path=parent_path,
+        name=name,
+        size=None,
+        type=ResourceType.FOLDER,
+    )
 
 
-class FolderDetailResponse(FolderResponse):
-    subfolders: List[FolderResponse] = []
-    files: List[FileResponse] = []
+def file_to_response(file: File) -> ResourceResponse:
+    name, parent_path = utils.get_resource_name_and_parent_path(file.full_path)
+    return ResourceResponse(
+        path=parent_path,
+        name=name,
+        size=file.size,
+        type=ResourceType.FILE,
+    )

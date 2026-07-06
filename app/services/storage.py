@@ -7,6 +7,7 @@ from fastapi import HTTPException, UploadFile
 from minio import S3Error
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import schemas
 from app.config import ResourceType
 from app.models import File, Folder
 from app.schemas import ResourceResponse
@@ -88,7 +89,7 @@ class StorageService:
             self._cleanup_minio_objects(uploaded_minio_paths)
             raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
         folder_results = [
-            self._folder_to_response(folder)
+            schemas.folder_to_response(folder)
             for folder in sorted(
                 created_folders.values(), key=lambda f: f.full_path.count("/")
             )
@@ -129,15 +130,6 @@ class StorageService:
             raise HTTPException(status_code=500, detail=f"MinIO upload error: {e}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
-
-    def _folder_to_response(self, folder: Folder) -> ResourceResponse:
-        name, parent_path = utils.get_resource_name_and_parent_path(folder.full_path)
-        return ResourceResponse(
-            path=parent_path,
-            name=name,
-            size=None,
-            type=ResourceType.FOLDER,
-        )
 
     def _parse_relative_path(self, filename: str | None) -> str:
         if not filename:
