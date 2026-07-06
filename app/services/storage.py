@@ -4,6 +4,7 @@ from tempfile import SpooledTemporaryFile
 from typing import List, Optional
 
 from fastapi import Depends, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from minio import S3Error
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +14,8 @@ from app.config import ResourceType
 from app.database import get_db
 from app.models import File, Folder
 from app.schemas import ResourceResponse, SessionData
-from app.services import utils
+from app.services import minio, utils
+from app.services.download_service import DownloadService
 from app.services.minio import BUCKET_NAME, minio_client
 from app.services.repository import StorageRepository
 
@@ -23,6 +25,7 @@ class StorageService:
         self.user_id = user_id
         self.db = db
         self.repo = StorageRepository(user_id, db)
+        self.download = DownloadService(user_id, db)
         self.minio_client = minio_client
         self.BUCKET_NAME = BUCKET_NAME
 
@@ -32,6 +35,8 @@ class StorageService:
             resource = await self.repo.get_folder_or_none(path)
         else:
             resource = await self.repo.get_file_or_none(path)
+            if not await minio.is_file_exists(path):
+                resource = None
         if not resource:
             raise HTTPException(
                 status_code=404,
@@ -112,10 +117,18 @@ class StorageService:
         return folder_results + file_results
 
     async def delete_resource(self, path):
+        path = utils.validate_path(path)
         if utils.is_resource_folder(path):
             await self._delete_folder(path)
         else:
             await self._delete_file(path)
+
+    async def download_resource(self, path: str) -> StreamingResponse:
+        path = utils.validate_path(path)
+        if utils.is_resource_folder(path):
+            return await self.download.download_folder(path)
+        else:
+            return await self.download.download_file(path)
 
     async def create_folder(self, name: str, parent_path: str) -> Folder:
         parent_path = utils.normalize_path(parent_path) if parent_path else ""
@@ -127,9 +140,9 @@ class StorageService:
 
     async def _delete_file(self, file_path: str) -> None:
         file = await self.repo.get_file_or_none(file_path)
-        if not file:
+        file_in_minio = await minio.is_file_exists(file_path)
+        if not file or not file_in_minio:
             raise HTTPException(404, "File not found")
-        print(f"deliting {file.full_path}")
         try:
             self.minio_client.remove_object(self.BUCKET_NAME, file_path)
         except S3Error as e:

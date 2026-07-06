@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from minio import Minio
+from minio import Minio, S3Error
 
 load_dotenv()
 
@@ -23,3 +23,13 @@ minio_client = _make_minio_client()
 
 if not minio_client.bucket_exists(BUCKET_NAME):
     minio_client.make_bucket(BUCKET_NAME)
+
+
+async def is_file_exists(file_path: str) -> bool:
+    try:
+        minio_client.stat_object(BUCKET_NAME, file_path)
+        return True
+    except S3Error as e:
+        if e.code == "NoSuchKey":
+            return False
+        raise
