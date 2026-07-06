@@ -71,6 +71,23 @@ async def move_resource(
         return schemas.file_to_response(resource)
 
 
+@router.get("/resource/search")
+async def search_resources(
+    query: str = Query(..., description="Запрос для поиска (частичное совпадение)"),
+    storage: StorageService = Depends(get_storage_service),
+) -> list[ResourceResponse]:
+
+    query = unquote(query)
+    resources = await storage.search_resources(query)
+    response = []
+    for resource in resources:
+        if utils.is_resource_folder(resource.full_path):
+            response.append(schemas.folder_to_response(resource))
+        else:
+            response.append(schemas.file_to_response(resource))
+    return response
+
+
 @router.post("/resource-swagger", status_code=status.HTTP_201_CREATED)
 async def upload_resources_swagger(
     path: str = Query(...),

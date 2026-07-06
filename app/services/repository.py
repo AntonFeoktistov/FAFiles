@@ -95,6 +95,31 @@ class StorageRepository:
         )
         return query.scalars().all()
 
+    async def get_folder_or_none(self, folder_path: str) -> Optional[Folder]:
+        folder_path = utils.normalize_path(folder_path)
+
+        folder_query = await self.db.execute(
+            select(Folder).where(
+                Folder.user_id == self.user_id,
+                Folder.full_path == folder_path,
+            )
+        )
+        return folder_query.scalar_one_or_none()
+
+    async def get_files_by_query(self, query: str) -> list:
+        query = await self.db.execute(
+            select(File).where(File.user_id == self.user_id, File.name.contains(query))
+        )
+        return query.scalars().all()
+
+    async def get_folders_by_query(self, query: str) -> list:
+        query = await self.db.execute(
+            select(Folder).where(
+                Folder.user_id == self.user_id, Folder.name.contains(query)
+            )
+        )
+        return query.scalars().all()
+
     async def create_file_in_db(
         self, folder_id: int, full_path: str, file_size: int
     ) -> File:

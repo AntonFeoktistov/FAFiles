@@ -67,6 +67,12 @@ class StorageService:
         else:
             return await self.move.move_file(path_from, path_to)
 
+    async def search_resources(self, query):
+        query = utils.validate_search_query(query)
+        files = await self.repo.get_files_by_query(query)
+        folders = await self.repo.get_folders_by_query(query)
+        return files + folders
+
     async def upload_resources(
         self,
         root_path: str,
