@@ -1,19 +1,14 @@
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Query, UploadFile, status
 from fastapi import File as FastAPIFile
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas
 from app.services import utils
-from app.services.repository import StorageRepository
-from app.services.storage import StorageService
+from app.services.storage import StorageService, get_storage_service
 
-from ..auth import get_current_user
-from ..database import get_db
 from ..schemas import (
     ResourceResponse,
-    SessionData,
 )
 
 router = APIRouter()
@@ -22,22 +17,10 @@ router = APIRouter()
 @router.get("/resource")
 async def get_resource(
     path: str = Query(description="Полный путь к ресурсу"),
-    db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    storage: StorageService = Depends(get_storage_service),
 ) -> ResourceResponse:
 
-    path = utils.validate_path(path)
-    repository = StorageRepository(current_user.user_id, db)
-    if utils.is_resource_folder(path):
-        resource = await repository.get_folder_or_none(path)
-    else:
-        resource = await repository.get_file_or_none(path)
-    if not resource:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Ресурс {path} не найден",
-        )
-
+    resource = storage.get_resource(path)
     if utils.is_resource_folder(resource.full_path):
         return schemas.folder_to_response(resource)
     return schemas.file_to_response(resource)
@@ -49,12 +32,9 @@ async def upload_resources(
     files: list[UploadFile] = FastAPIFile(
         ..., description="Несколько файлов (для фронта)"
     ),
-    db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    storage: StorageService = Depends(get_storage_service),
 ):
-
     decoded_path = unquote(path)
-    storage = StorageService(current_user.user_id, db)
     return await storage.upload_resources(decoded_path, files)
 
 
@@ -62,13 +42,21 @@ async def upload_resources(
 async def upload_resources_swagger(
     path: str = Query(...),
     file: UploadFile = FastAPIFile(..., description="Один файл (для Swagger)"),
-    db: AsyncSession = Depends(get_db),
-    current_user: SessionData = Depends(get_current_user),
+    storage: StorageService = Depends(get_storage_service),
 ):
     upload_files = [file]
     decoded_path = unquote(path)
-    storage = StorageService(current_user.user_id, db)
     return await storage.upload_resources(decoded_path, upload_files)
+
+
+@router.delete("/resource", status_code=204)
+async def delete_resource(
+    path: str = Query(..., description="Полный путь к ресурсу"),
+    storage: StorageService = Depends(get_storage_service),
+):
+    decoded_path = unquote(path)
+    print(decoded_path)
+    await storage.delete_resource(decoded_path)
 
 
 # @router.get("/")
@@ -131,22 +119,6 @@ async def upload_resources_swagger(
 #     )
 
 #     return FileResponse(path=new_file.full_path, name=new_file.name, size=file.size)
-
-
-# @router.delete("/", status_code=204)
-# async def delete_resource(
-#     path: str = Query(..., description="Полный путь к ресурсу"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: UserResponse = Depends(get_current_user),
-# ):
-#     is_folder = path.endswith("/")
-
-#     if is_folder:
-#         await FolderService.delete_folder(path, current_user.user_id, db)
-#     if not is_folder:
-#         await FileService.delete_file(path, current_user.user_id, db)
-
-#     return {"message": "Resource deleted"}
 
 
 # @router.post("/rename")

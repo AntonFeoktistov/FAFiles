@@ -3,14 +3,16 @@ import zipfile
 from tempfile import SpooledTemporaryFile
 from typing import List, Optional
 
-from fastapi import HTTPException, UploadFile
+from fastapi import Depends, HTTPException, UploadFile
 from minio import S3Error
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas
+from app.auth import get_current_user
 from app.config import ResourceType
+from app.database import get_db
 from app.models import File, Folder
-from app.schemas import ResourceResponse
+from app.schemas import ResourceResponse, SessionData
 from app.services import utils
 from app.services.minio import BUCKET_NAME, minio_client
 from app.services.repository import StorageRepository
@@ -23,6 +25,19 @@ class StorageService:
         self.repo = StorageRepository(user_id, db)
         self.minio_client = minio_client
         self.BUCKET_NAME = BUCKET_NAME
+
+    async def get_resource(self, path):
+        path = utils.validate_path(path)
+        if utils.is_resource_folder(path):
+            resource = await self.repo.get_folder_or_none(path)
+        else:
+            resource = await self.repo.get_file_or_none(path)
+        if not resource:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ресурс {path} не найден",
+            )
+        return resource
 
     async def upload_resources(
         self,
@@ -96,6 +111,12 @@ class StorageService:
         ]
         return folder_results + file_results
 
+    async def delete_resource(self, path):
+        if utils.is_resource_folder(path):
+            await self._delete_folder(path)
+        else:
+            await self._delete_file(path)
+
     async def create_folder(self, name: str, parent_path: str) -> Folder:
         parent_path = utils.normalize_path(parent_path) if parent_path else ""
         folder_path = utils.normalize_path(f"{parent_path}{name.strip('/')}/")
@@ -103,6 +124,38 @@ class StorageService:
         await self.db.commit()
         await self.db.refresh(folder)
         return folder
+
+    async def _delete_file(self, file_path: str) -> None:
+        file = await self.repo.get_file_or_none(file_path)
+        if not file:
+            raise HTTPException(404, "File not found")
+        print(f"deliting {file.full_path}")
+        try:
+            self.minio_client.remove_object(self.BUCKET_NAME, file_path)
+        except S3Error as e:
+            raise HTTPException(500, f"MinIO error: {e}")
+
+        await self.db.delete(file)
+        await self.db.commit()
+
+    async def _delete_folder(self, folder_path: str) -> None:
+        folder_path = utils.normalize_path(folder_path)
+
+        folder = await self.repo.get_folder_or_none(folder_path)
+        if not folder:
+            raise HTTPException(404, f"Folder '{folder_path}' not found")
+
+        files = await self.repo.get_files_by_prefix(folder_path)
+
+        for file_obj in files:
+            try:
+                self.minio_client.remove_object(self.BUCKET_NAME, file_obj.full_path)
+            except S3Error as e:
+                if e.code != "NoSuchKey":
+                    raise HTTPException(500, f"MinIO error: {e}")
+
+        await self.db.delete(folder)
+        await self.db.commit()
 
     async def _upload_file_and_get_size(
         self,
@@ -173,3 +226,10 @@ class StorageService:
                 self.minio_client.remove_object(self.BUCKET_NAME, object_path)
             except S3Error:
                 pass
+
+
+async def get_storage_service(
+    db: AsyncSession = Depends(get_db),
+    current_user: SessionData = Depends(get_current_user),
+) -> StorageService:
+    return StorageService(user_id=current_user.user_id, db=db)

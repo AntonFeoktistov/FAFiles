@@ -86,3 +86,11 @@ class StorageRepository:
             )
         )
         return folder_query.scalar_one_or_none()
+
+    async def get_files_by_prefix(self, prefix: str) -> list[File]:
+        query = await self.db.execute(
+            select(File).where(
+                File.user_id == self.user_id, File.full_path.startswith(prefix)
+            )
+        )
+        return query.scalars().all()
