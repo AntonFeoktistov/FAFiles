@@ -118,12 +118,11 @@ async def test_delete_file_wrong_user(
     )
     file_path = get_root_folder_2 + "test1.txt"
 
-    # 🔥 Отладка: проверить, видит ли первый пользователь этот файл
     response = await auth_client.get(
         "/api/resource",
         params={"path": file_path},
     )
-    print(f"GET ответ: {response.status_code}")  # Должен быть 404
+    print(f"GET ответ: {response.status_code}")
 
     response = await auth_client.delete(
         "/api/resource",
