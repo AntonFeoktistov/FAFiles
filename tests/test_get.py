@@ -1,18 +1,40 @@
-from fastapi import status
+import utils
 from httpx import AsyncClient
 
-from app.services import utils
 
-
-async def assert_get_file(auth_client: AsyncClient, file_path):
-    response = await auth_client.post(
-        "/api/resource",
-        params={"path": file_path},
+async def test_get_file_success(
+    auth_client: AsyncClient,
+    get_root_folder: str,
+    make_test_file,
+):
+    await utils.upload_file(
+        auth_client,
+        get_root_folder,
+        make_test_file,
+        name="test1.txt",
+        content="Hello World",
     )
-    name, folder_path = utils.get_resource_name_and_parent_path(file_path)
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data[0]["name"] == name
-    assert data[0]["path"] == folder_path
-    assert data[0]["size"] is not None
-    assert data[0]["type"] == "FILE"
+
+    file_path = get_root_folder + "test1.txt"
+    await utils.assert_file_exists(
+        auth_client,
+        file_path,
+        expected_name="test1.txt",
+        expected_size=len("Hello World"),
+    )
+
+
+async def test_get_folder_success(
+    auth_client: AsyncClient,
+    get_root_folder: str,
+):
+    folder_name = "new_folder"
+    folder_path = get_root_folder + folder_name + "/"
+
+    await utils.create_folder(auth_client, get_root_folder, name=folder_name)
+
+    await utils.assert_folder_exists(
+        auth_client,
+        folder_path,
+        expected_name=folder_name,
+    )

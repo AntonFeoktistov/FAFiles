@@ -108,28 +108,13 @@ async def test_folder(test_user: User, db_session: AsyncSession):
 
 
 @pytest.fixture(scope="function")
-async def auth_client(client: AsyncClient, test_user: User):
-    response = Response()
-    session_data = SessionData(user_id=test_user.id, username=test_user.username)
-    await create_session(response, session_data)
-
-    cookie_header = response.headers.get("set-cookie", "")
-    session_id = None
-    for part in cookie_header.split(";"):
-        part = part.strip()
-        if part.startswith("session_id="):
-            session_id = part.split("=")[1]
-            break
-
-    if session_id:
-        client.cookies.set("session_id", session_id)
-
-    return client
+def get_root_folder(test_user):
+    return f"user-{test_user.id}-files/"
 
 
 @pytest.fixture(scope="function")
-def get_root_folder(test_user):
-    return f"user-{test_user.id}-files/"
+def get_root_folder_2(test_user_2):
+    return f"user-{test_user_2.id}-files/"
 
 
 @pytest.fixture(scope="function")
@@ -160,3 +145,63 @@ async def unauth_client(db_session: AsyncSession):
         yield client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+async def test_user_2(db_session: AsyncSession) -> User:
+    password_hash = hash_password("testpass456")
+    user = User(username="testuser2", password_hash=password_hash)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    storage = StorageService(user.id, db_session)
+    await storage.create.create_folder(
+        name=f"user-{user.id}-files",
+        parent_path="",
+    )
+    return user
+
+
+@pytest.fixture(scope="function")
+async def auth_client(client: AsyncClient, test_user: User):
+    response = Response()
+    session_data = SessionData(user_id=test_user.id, username=test_user.username)
+    await create_session(response, session_data)
+
+    cookie_header = response.headers.get("set-cookie", "")
+    session_id = None
+    for part in cookie_header.split(";"):
+        part = part.strip()
+        if part.startswith("session_id="):
+            session_id = part.split("=")[1]
+            break
+
+    if session_id:
+        client.cookies.set("session_id", session_id)
+
+    return client
+
+
+@pytest.fixture(scope="function")
+async def auth_client_2(test_user_2: User):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = Response()
+        session_data = SessionData(
+            user_id=test_user_2.id, username=test_user_2.username
+        )
+        await create_session(response, session_data)
+
+        cookie_header = response.headers.get("set-cookie", "")
+        session_id = None
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("session_id="):
+                session_id = part.split("=")[1]
+                break
+
+        if session_id:
+            client.cookies.set("session_id", session_id)
+
+        yield client
