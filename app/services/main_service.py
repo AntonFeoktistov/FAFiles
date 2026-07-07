@@ -73,6 +73,23 @@ class StorageService:
         folders = await self.repo.get_folders_by_query(query)
         return files + folders
 
+    async def get_folder_files(self, folder_path):
+        folder_path = utils.validate_path(folder_path)
+        folder = await self.repo.get_folder_or_none(folder_path)
+        if not folder:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ресурс {folder_path} не найден",
+            )
+        folder_files = await self.repo.get_files_by_prefix(folder_path)
+        return folder_files
+
+    async def create_folder(self, folder_path):
+        folder_path = utils.validate_path(folder_path)
+        folder_name, parent_path = utils.get_resource_name_and_parent_path(folder_path)
+        folder = await self.repo.create_folder(folder_name, parent_path)
+        return folder
+
     async def upload_resources(
         self,
         root_path: str,

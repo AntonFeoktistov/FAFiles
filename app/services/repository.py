@@ -16,7 +16,6 @@ class StorageRepository:
     async def create_folder(self, name: str, parent_path: str) -> Folder:
         name = name.strip("/")
         parent_path = utils.normalize_path(parent_path) if parent_path else ""
-
         folder_path = f"{parent_path}{name}/"
         folder_path = utils.normalize_path(folder_path)
 
@@ -46,6 +45,7 @@ class StorageRepository:
         )
 
         self.db.add(new_folder)
+        await self.db.commit()
         await self.db.flush()
         return new_folder
 
@@ -94,17 +94,6 @@ class StorageRepository:
             )
         )
         return query.scalars().all()
-
-    async def get_folder_or_none(self, folder_path: str) -> Optional[Folder]:
-        folder_path = utils.normalize_path(folder_path)
-
-        folder_query = await self.db.execute(
-            select(Folder).where(
-                Folder.user_id == self.user_id,
-                Folder.full_path == folder_path,
-            )
-        )
-        return folder_query.scalar_one_or_none()
 
     async def get_files_by_query(self, query: str) -> list:
         query = await self.db.execute(

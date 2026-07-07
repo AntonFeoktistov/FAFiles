@@ -88,6 +88,31 @@ async def search_resources(
     return response
 
 
+@router.get("/directory")
+async def get_directory(
+    path: str = Query(description="Полный путь к ресурсу"),
+    storage: StorageService = Depends(get_storage_service),
+) -> list[ResourceResponse]:
+
+    path = unquote(path)
+    folder_files = storage.get_folder_files(path)
+    response = []
+    for file in folder_files:
+        response.append(schemas.file_to_response(file))
+    return response
+
+
+@router.post("/directory", status_code=status.HTTP_201_CREATED)
+async def create_directory(
+    path: str = Query(...),
+    storage: StorageService = Depends(get_storage_service),
+):
+    path = unquote(path)
+    folder = await storage.create_folder(path)
+    return schemas.folder_to_response(folder)
+
+
+# only for testing
 @router.post("/resource-swagger", status_code=status.HTTP_201_CREATED)
 async def upload_resources_swagger(
     path: str = Query(...),
