@@ -5,7 +5,6 @@ from httpx import AsyncClient
 
 async def test_download_file_success(
     auth_client: AsyncClient,
-    get_root_folder: str,
     make_test_file,
 ):
 
@@ -14,13 +13,12 @@ async def test_download_file_success(
 
     await utils.upload_file(
         auth_client,
-        get_root_folder,
         make_test_file,
         name=file_name,
         content=content,
     )
 
-    file_path = get_root_folder + file_name
+    file_path = file_name
     response = await auth_client.get(
         "/api/resource/download",
         params={"path": file_path},
@@ -33,9 +31,8 @@ async def test_download_file_success(
 
 async def test_download_file_not_found(
     auth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    file_path = get_root_folder + "nonexistent.txt"
+    file_path = "nonexistent.txt"
     response = await auth_client.get(
         "/api/resource/download",
         params={"path": file_path},
@@ -43,11 +40,21 @@ async def test_download_file_not_found(
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+async def test_download_file_empty_path(
+    auth_client: AsyncClient,
+):
+    file_path = ""
+    response = await auth_client.get(
+        "/api/resource/download",
+        params={"path": file_path},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 async def test_download_file_unauthorized(
     unauth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    file_path = get_root_folder + "test.txt"
+    file_path = "test.txt"
     response = await unauth_client.get(
         "/api/resource/download",
         params={"path": file_path},
@@ -57,13 +64,12 @@ async def test_download_file_unauthorized(
 
 async def test_download_folder_success(
     auth_client: AsyncClient,
-    get_root_folder: str,
     make_test_file,
 ):
     folder_name = "docs"
-    folder_path = get_root_folder + folder_name + "/"
+    folder_path = folder_name + "/"
 
-    await utils.create_folder(auth_client, get_root_folder, name=folder_name)
+    await utils.create_folder(auth_client, name=folder_name)
 
     expected_files = {
         "report.pdf": "PDF Content",
@@ -74,8 +80,8 @@ async def test_download_folder_success(
     for name, content in expected_files.items():
         await utils.upload_file(
             auth_client,
-            folder_path,
             make_test_file,
+            folder_path,
             name=name,
             content=content,
         )
@@ -90,12 +96,11 @@ async def test_download_folder_success(
 
 async def test_download_empty_folder(
     auth_client: AsyncClient,
-    get_root_folder: str,
 ):
     folder_name = "empty_folder"
-    folder_path = get_root_folder + folder_name + "/"
+    folder_path = folder_name + "/"
 
-    await utils.create_folder(auth_client, get_root_folder, name=folder_name)
+    await utils.create_folder(auth_client, name=folder_name)
 
     response = await auth_client.get(
         "/api/resource/download",
@@ -107,9 +112,8 @@ async def test_download_empty_folder(
 
 async def test_download_folder_not_found(
     auth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    folder_path = get_root_folder + "nonexistent_folder/"
+    folder_path = "nonexistent_folder/"
     response = await auth_client.get(
         "/api/resource/download",
         params={"path": folder_path},
@@ -117,11 +121,32 @@ async def test_download_folder_not_found(
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+async def test_download_folder_empty_path(
+    auth_client: AsyncClient,
+):
+    folder_path = ""
+    response = await auth_client.get(
+        "/api/resource/download",
+        params={"path": folder_path},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+async def test_download_folder_empty_path_2(
+    auth_client: AsyncClient,
+):
+    folder_path = "/"
+    response = await auth_client.get(
+        "/api/resource/download",
+        params={"path": folder_path},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 async def test_download_folder_unauthorized(
     unauth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    folder_path = get_root_folder + "some_folder/"
+    folder_path = "some_folder/"
     response = await unauth_client.get(
         "/api/resource/download",
         params={"path": folder_path},
@@ -131,20 +156,18 @@ async def test_download_folder_unauthorized(
 
 async def test_download_folder_wrong_user(
     auth_client: AsyncClient,
-    get_root_folder: str,
-    get_root_folder_2: str,
     make_test_file,
     auth_client_2: AsyncClient,
 ):
     folder_name = "docs"
 
-    folder_path_2 = get_root_folder_2 + folder_name + "/"
+    folder_path_2 = folder_name + "/"
 
-    await utils.create_folder(auth_client_2, get_root_folder_2, name=folder_name)
+    await utils.create_folder(auth_client_2, name=folder_name)
     await utils.upload_file(
         auth_client_2,
-        folder_path_2,
         make_test_file,
+        folder_path_2,
         name="file.txt",
         content="Hello",
     )

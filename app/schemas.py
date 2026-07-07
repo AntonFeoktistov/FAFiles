@@ -47,6 +47,7 @@ class FileResponse(BaseModel):
 
 def folder_to_response(folder: Folder) -> ResourceResponse:
     name, parent_path = utils.get_resource_name_and_parent_path(folder.full_path)
+    parent_path = _delete_user_prefix(parent_path)
     return ResourceResponse(
         path=parent_path,
         name=name,
@@ -57,9 +58,14 @@ def folder_to_response(folder: Folder) -> ResourceResponse:
 
 def file_to_response(file: File) -> ResourceResponse:
     name, parent_path = utils.get_resource_name_and_parent_path(file.full_path)
+    parent_path = _delete_user_prefix(parent_path)
     return ResourceResponse(
         path=parent_path,
         name=name,
         size=file.size,
         type=ResourceType.FILE,
     )
+
+
+def _delete_user_prefix(full_path: str):
+    return ("/").join(full_path.split("/")[1:])

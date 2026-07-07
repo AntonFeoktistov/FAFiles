@@ -7,8 +7,8 @@ from httpx import AsyncClient
 
 async def upload_file(
     auth_client: AsyncClient,
-    folder_path: str,
     make_test_file,
+    folder_path: str = "",
     name: str = "test.txt",
     content: str = "Hello World",
     expected_status: int = 201,
@@ -35,8 +35,8 @@ async def upload_file(
 
 async def upload_file_expect_failure(
     auth_client: AsyncClient,
-    folder_path: str,
     make_test_file,
+    folder_path: str = "",
     name: str = "test.txt",
     content: str = "Hello World",
     expected_status: int = 409,
@@ -60,7 +60,7 @@ async def upload_file_expect_failure(
 
 async def create_folder(
     auth_client: AsyncClient,
-    root_path: str,
+    root_path: str = "",
     name: str = "new_folder",
     expected_status: int = 201,
 ) -> dict:
@@ -82,7 +82,7 @@ async def create_folder(
 
 async def create_folder_expect_failure(
     auth_client: AsyncClient,
-    root_path: str,
+    root_path: str = "",
     name: str = "new_folder",
     expected_status: int = 409,
     expected_message: str = None,

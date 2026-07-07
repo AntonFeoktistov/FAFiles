@@ -19,7 +19,7 @@ async def get_resource(
     path: str = Query(description="Полный путь к ресурсу"),
     storage: StorageService = Depends(get_storage_service),
 ) -> ResourceResponse:
-
+    path = utils.decode_path(path, storage.user_id)
     resource = await storage.get_resource(path)
     if utils.is_resource_folder(resource.full_path):
         return schemas.folder_to_response(resource)
@@ -34,8 +34,8 @@ async def upload_resources(
     ),
     storage: StorageService = Depends(get_storage_service),
 ):
-    decoded_path = unquote(path)
-    return await storage.upload_resources(decoded_path, files)
+    path = utils.decode_path(path, storage.user_id)
+    return await storage.upload_resources(path, files)
 
 
 @router.delete("/resource", status_code=204)
@@ -43,8 +43,8 @@ async def delete_resource(
     path: str = Query(..., description="Полный путь к ресурсу"),
     storage: StorageService = Depends(get_storage_service),
 ):
-    decoded_path = unquote(path)
-    await storage.delete_resource(decoded_path)
+    path = utils.decode_path(path, storage.user_id)
+    await storage.delete_resource(path)
 
 
 @router.get("/resource/download", status_code=200)
@@ -52,8 +52,8 @@ async def download_resource(
     path: str = Query(..., description="Полный путь к ресурсу"),
     storage: StorageService = Depends(get_storage_service),
 ):
-    decoded_path = unquote(path)
-    return await storage.download_resource(decoded_path)
+    path = utils.decode_path(path, storage.user_id)
+    return await storage.download_resource(path)
 
 
 @router.post("/resource/move", status_code=status.HTTP_201_CREATED)
@@ -62,8 +62,8 @@ async def move_resource(
     to_path: str = Query(..., alias="to", description="Куда перемещение"),
     storage: StorageService = Depends(get_storage_service),
 ):
-    path_from = unquote(from_path)
-    path_to = unquote(to_path)
+    path_from = utils.decode_path(from_path, storage.user_id)
+    path_to = utils.decode_path(to_path, storage.user_id)
     resource = await storage.move_resource(path_from, path_to)
     if utils.is_resource_folder(resource.full_path):
         return schemas.folder_to_response(resource)
@@ -94,7 +94,7 @@ async def get_directory(
     storage: StorageService = Depends(get_storage_service),
 ) -> list[ResourceResponse]:
 
-    path = unquote(path)
+    path = utils.decode_path(path, storage.user_id)
     folder_files = storage.get_folder_files(path)
     response = []
     for file in folder_files:
@@ -107,7 +107,7 @@ async def create_directory(
     path: str = Query(...),
     storage: StorageService = Depends(get_storage_service),
 ):
-    path = unquote(path)
+    path = utils.decode_path(path, storage.user_id)
     folder = await storage.create_folder(path)
     return schemas.folder_to_response(folder)
 
@@ -120,5 +120,5 @@ async def upload_resources_swagger(
     storage: StorageService = Depends(get_storage_service),
 ):
     upload_files = [file]
-    decoded_path = unquote(path)
-    return await storage.upload_resources(decoded_path, upload_files)
+    path = utils.decode_path(path, storage.user_id)
+    return await storage.upload_resources(path, upload_files)

@@ -2,8 +2,15 @@ import io
 import zipfile
 from tempfile import SpooledTemporaryFile
 from typing import List
+from urllib.parse import unquote
 
 from fastapi import HTTPException, UploadFile
+
+
+def decode_path(path, user_id):
+    prefix = f"user-{user_id}-files/"
+    decoded_path = prefix + unquote(path)
+    return decoded_path
 
 
 def is_resource_folder(path):
@@ -29,7 +36,8 @@ def validate_search_query(query: str):
 
 
 def validate_path(path: str, param_name: str = "path") -> str:
-
+    old_path = path
+    path = _delete_user_prefix(path)
     if not path or not path.strip():
         raise HTTPException(
             status_code=400, detail=f"Параметр '{param_name}' не может быть пустым"
@@ -47,7 +55,7 @@ def validate_path(path: str, param_name: str = "path") -> str:
         raise HTTPException(
             status_code=400, detail="Путь слишком длинный (максимум 1024 символа)"
         )
-    return path
+    return old_path
 
 
 def normalize_relative_path(filename: str) -> str:
@@ -138,3 +146,7 @@ async def _zip_to_upload_files(zip_file: UploadFile) -> List[UploadFile]:
     if not entries:
         raise HTTPException(status_code=400, detail="ZIP archive is empty")
     return entries
+
+
+def _delete_user_prefix(full_path: str):
+    return ("/").join(full_path.split("/")[1:])

@@ -5,18 +5,16 @@ from httpx import AsyncClient
 
 async def test_delete_file_success(
     auth_client: AsyncClient,
-    get_root_folder: str,
     make_test_file,
 ):
     await utils.upload_file(
         auth_client,
-        get_root_folder,
         make_test_file,
         name="test1.txt",
         content="Hello World",
     )
 
-    file_path = get_root_folder + "test1.txt"
+    file_path = "test1.txt"
 
     response = await auth_client.delete(
         "/api/resource",
@@ -29,15 +27,18 @@ async def test_delete_file_success(
 
 async def test_delete_folder_success(
     auth_client: AsyncClient,
-    get_root_folder: str,
     make_test_file,
 ):
     folder_name = "new_folder"
-    folder_path = get_root_folder + folder_name + "/"
+    folder_path = folder_name + "/"
 
-    await utils.create_folder(auth_client, get_root_folder, name=folder_name)
+    await utils.create_folder(auth_client, name=folder_name)
     await utils.upload_file(
-        auth_client, folder_path, make_test_file, name="test1.txt", content="text"
+        auth_client,
+        make_test_file,
+        folder_path=folder_name,
+        name="test1.txt",
+        content="text",
     )
     file_path = folder_path + "test1.txt"
 
@@ -53,9 +54,8 @@ async def test_delete_folder_success(
 
 async def test_delete_file_not_found(
     auth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    file_path = get_root_folder + "nonexistent.txt"
+    file_path = "nonexistent.txt"
 
     response = await auth_client.delete(
         "/api/resource",
@@ -67,9 +67,8 @@ async def test_delete_file_not_found(
 
 async def test_delete_folder_not_found(
     auth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    folder_path = get_root_folder + "nonexistent_folder/"
+    folder_path = "nonexistent_folder/"
 
     response = await auth_client.delete(
         "/api/resource",
@@ -81,9 +80,8 @@ async def test_delete_folder_not_found(
 
 async def test_delete_file_unauthorized(
     unauth_client: AsyncClient,
-    get_root_folder: str,
 ):
-    file_path = get_root_folder + "test.txt"
+    file_path = "test.txt"
 
     response = await unauth_client.delete(
         "/api/resource",
@@ -104,19 +102,16 @@ async def test_delete_file_invalid_path(
 
 async def test_delete_file_wrong_user(
     auth_client: AsyncClient,
-    get_root_folder: str,
-    get_root_folder_2: str,
     make_test_file,
     auth_client_2: AsyncClient,
 ):
     await utils.upload_file(
         auth_client_2,
-        get_root_folder_2,
         make_test_file,
         name="test1.txt",
         content="Hello World",
     )
-    file_path = get_root_folder_2 + "test1.txt"
+    file_path = "test1.txt"
 
     response = await auth_client.get(
         "/api/resource",

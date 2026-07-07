@@ -107,14 +107,14 @@ async def test_folder(test_user: User, db_session: AsyncSession):
     return folder
 
 
-@pytest.fixture(scope="function")
-def get_root_folder(test_user):
-    return f"user-{test_user.id}-files/"
+# @pytest.fixture(scope="function")
+# def get_root_folder(test_user):
+#     return f"user-{test_user.id}-files/"
 
 
-@pytest.fixture(scope="function")
-def get_root_folder_2(test_user_2):
-    return f"user-{test_user_2.id}-files/"
+# @pytest.fixture(scope="function")
+# def get_root_folder_2(test_user_2):
+#     return f"user-{test_user_2.id}-files/"
 
 
 @pytest.fixture(scope="function")

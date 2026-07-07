@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 
-pytestmark = pytest.mark.skip(reason="Временно отключено")
+# pytestmark = pytest.mark.skip(reason="Временно отключено")
 
 
 async def test_register_success(client, db_session: AsyncSession):
