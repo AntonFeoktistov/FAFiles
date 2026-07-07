@@ -101,7 +101,7 @@ class StorageService:
         root_folder = await self.repo.get_folder_or_none(root_path)
         if not root_folder:
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail=f"Родительская папка не найдена: {root_path}",
             )
         entries = await utils.expand_upload_files(files)
@@ -138,11 +138,11 @@ class StorageService:
             await self.db.commit()
         except HTTPException:
             await self.db.rollback()
-            minio.cleanup_minio_objects(uploaded_minio_paths)
+            await minio.cleanup_minio_objects(uploaded_minio_paths)
             raise
         except Exception as e:
             await self.db.rollback()
-            minio.cleanup_minio_objects(uploaded_minio_paths)
+            await minio.cleanup_minio_objects(uploaded_minio_paths)
             raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
         folder_results = [
             schemas.folder_to_response(folder)

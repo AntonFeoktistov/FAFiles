@@ -1,38 +1,18 @@
-# async def test_get_folder_files(auth_client, test_user):
+from fastapi import status
+from httpx import AsyncClient
 
-#     response = await auth_client.get(
-#         "/resource/",
-#         params={
-#             "folder_path": f"{test_user.username}-files/",
-#         },
-#     )
-
-#     assert response.status_code == 200
-#     data = response.json()
-
-#     assert "subfolders" in data
-#     assert "files" in data
-
-#     if data["subfolders"]:
-#         subfolder = data["subfolders"][0]
-#         assert "name" in subfolder
-#         assert "full_path" in subfolder
-
-#     if data["files"]:
-#         file = data["files"][0]
-#         assert "name" in file
-#         assert "file_path" in file
+from app.services import utils
 
 
-# async def test_get_folder_files_incorrect_path(auth_client, test_user):
-#     response = await auth_client.get(
-#         "/resource/",
-#         params={
-#             "folder_path": "error_path/",
-#         },
-#     )
-
-#     assert response.status_code == 404
-#     data = response.json()
-
-#     assert "detail" in data
+async def assert_get_file(auth_client: AsyncClient, file_path):
+    response = await auth_client.post(
+        "/api/resource",
+        params={"path": file_path},
+    )
+    name, folder_path = utils.get_resource_name_and_parent_path(file_path)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data[0]["name"] == name
+    assert data[0]["path"] == folder_path
+    assert data[0]["size"] is not None
+    assert data[0]["type"] == "FILE"

@@ -92,7 +92,7 @@ async def test_user(db_session: AsyncSession) -> User:
 
     storage = StorageService(user.id, db_session)
 
-    await storage.create.create_folder(name=f"{user.username}-files", parent_path="")
+    await storage.create.create_folder(name=f"user-{user.id}-files", parent_path="")
 
     return user
 
@@ -125,6 +125,21 @@ async def auth_client(client: AsyncClient, test_user: User):
         client.cookies.set("session_id", session_id)
 
     return client
+
+
+@pytest.fixture(scope="function")
+def get_root_folder(test_user):
+    return f"user-{test_user.id}-files/"
+
+
+@pytest.fixture(scope="function")
+def make_test_file():
+    def _make_test_file(
+        name: str = "test.txt", content: str = "Hello World", encoding: str = "utf-8"
+    ):
+        return (name, content.encode(encoding))
+
+    return _make_test_file
 
 
 @pytest.fixture(scope="function")
