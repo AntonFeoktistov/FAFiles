@@ -1,3 +1,4 @@
+from typing import Union
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Query, UploadFile, status
@@ -16,7 +17,7 @@ router = APIRouter()
 
 @router.get("/resource")
 async def get_resource(
-    path: str = Query(description="Полный путь к ресурсу"),
+    path: str = Query("", description="Полный путь к ресурсу"),
     storage: StorageService = Depends(get_storage_service),
 ) -> ResourceResponse:
     path = utils.decode_path(path, storage.user_id)
@@ -28,13 +29,15 @@ async def get_resource(
 
 @router.post("/resource", status_code=status.HTTP_201_CREATED)
 async def upload_resources(
-    path: str = Query(...),
-    files: list[UploadFile] = FastAPIFile(
-        ..., description="Несколько файлов (для фронта)"
+    path: str = "",
+    files: Union[UploadFile, list[UploadFile]] = FastAPIFile(
+        ..., description="Файлы для загрузки"
     ),
     storage: StorageService = Depends(get_storage_service),
 ):
     path = utils.decode_path(path, storage.user_id)
+    if isinstance(files, UploadFile):
+        files = [files]
     return await storage.upload_resources(path, files)
 
 
@@ -58,8 +61,8 @@ async def download_resource(
 
 @router.post("/resource/move", status_code=status.HTTP_201_CREATED)
 async def move_resource(
-    from_path: str = Query(..., alias="from", description="Откуда перемещение"),
-    to_path: str = Query(..., alias="to", description="Куда перемещение"),
+    from_path: str = Query("", alias="from", description="Откуда перемещение"),
+    to_path: str = Query("", alias="to", description="Куда перемещение"),
     storage: StorageService = Depends(get_storage_service),
 ):
     path_from = utils.decode_path(from_path, storage.user_id)
@@ -73,7 +76,7 @@ async def move_resource(
 
 @router.get("/resource/search")
 async def search_resources(
-    query: str = Query(..., description="Запрос для поиска (частичное совпадение)"),
+    query: str = Query("", description="Запрос для поиска (частичное совпадение)"),
     storage: StorageService = Depends(get_storage_service),
 ) -> list[ResourceResponse]:
 
@@ -90,24 +93,27 @@ async def search_resources(
 
 @router.get("/directory")
 async def get_directory(
-    path: str = Query(description="Полный путь к ресурсу"),
+    path: str = Query("", description="Полный путь к ресурсу"),
     storage: StorageService = Depends(get_storage_service),
 ) -> list[ResourceResponse]:
 
     path = utils.decode_path(path, storage.user_id)
-    folder_files = storage.get_folder_files(path)
+    folder_resources = await storage.get_folder_resources(path)
     response = []
-    for file in folder_files:
-        response.append(schemas.file_to_response(file))
+    for resource in folder_resources:
+        if utils.is_resource_folder(resource.full_path):
+            response.append(schemas.folder_to_response(resource))
+        else:
+            response.append(schemas.file_to_response(resource))
     return response
 
 
 @router.post("/directory", status_code=status.HTTP_201_CREATED)
 async def create_directory(
-    path: str = Query(...),
+    path: str = "",
     storage: StorageService = Depends(get_storage_service),
 ):
-    path = utils.decode_path(path, storage.user_id)
+    path = utils.decode_path(path, storage.user_id) + "/"
     folder = await storage.create_folder(path)
     return schemas.folder_to_response(folder)
 
@@ -115,7 +121,7 @@ async def create_directory(
 # only for testing
 @router.post("/resource-swagger", status_code=status.HTTP_201_CREATED)
 async def upload_resources_swagger(
-    path: str = Query(...),
+    path: str = "",
     file: UploadFile = FastAPIFile(..., description="Один файл (для Swagger)"),
     storage: StorageService = Depends(get_storage_service),
 ):

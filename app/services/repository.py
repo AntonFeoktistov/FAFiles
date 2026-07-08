@@ -18,7 +18,7 @@ class StorageRepository:
         parent_path = utils.normalize_path(parent_path) if parent_path else ""
         folder_path = f"{parent_path}{name}/"
         folder_path = utils.normalize_path(folder_path)
-
+        print(folder_path)
         existing = await self.get_folder_or_none(folder_path)
         if existing:
             raise HTTPException(409, "Folder already exists")
@@ -95,6 +95,16 @@ class StorageRepository:
         )
         return query.scalars().all()
 
+    async def get_folders_by_prefix(self, prefix: str) -> list[Folder]:
+        query = await self.db.execute(
+            select(Folder).where(
+                Folder.user_id == self.user_id,
+                Folder.full_path.startswith(prefix),
+                Folder.full_path != prefix,
+            )
+        )
+        return query.scalars().all()
+
     async def get_files_by_query(self, query: str) -> list:
         query = await self.db.execute(
             select(File).where(File.user_id == self.user_id, File.name.contains(query))
@@ -105,6 +115,22 @@ class StorageRepository:
         query = await self.db.execute(
             select(Folder).where(
                 Folder.user_id == self.user_id, Folder.name.contains(query)
+            )
+        )
+        return query.scalars().all()
+
+    async def get_files_by_parent(self, parent: Folder) -> list:
+        query = await self.db.execute(
+            select(File).where(
+                File.user_id == self.user_id, File.folder_id == parent.id
+            )
+        )
+        return query.scalars().all()
+
+    async def get_folders_by_parent(self, parent: Folder) -> list:
+        query = await self.db.execute(
+            select(Folder).where(
+                Folder.user_id == self.user_id, Folder.parent_id == parent.id
             )
         )
         return query.scalars().all()

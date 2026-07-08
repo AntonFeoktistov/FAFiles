@@ -30,7 +30,7 @@ def normalize_path(path: str) -> str:
 
 
 def validate_search_query(query: str):
-    if len(query) <= 0 and len(query) > 40:
+    if len(query) <= 0 or len(query) > 40:
         raise HTTPException(status_code=400, detail=f"Запрос {query} невалидный")
     return query
 

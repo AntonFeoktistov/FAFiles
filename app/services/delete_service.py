@@ -34,19 +34,21 @@ class DeleteService:
 
     async def delete_folder(self, folder_path: str) -> None:
         folder_path = utils.normalize_path(folder_path)
-
         folder = await self.repo.get_folder_or_none(folder_path)
         if not folder:
             raise HTTPException(404, f"Folder '{folder_path}' not found")
 
         files = await self.repo.get_files_by_prefix(folder_path)
-
         for file_obj in files:
             try:
                 self.minio_client.remove_object(self.BUCKET_NAME, file_obj.full_path)
             except S3Error as e:
                 if e.code != "NoSuchKey":
                     raise HTTPException(500, f"MinIO error: {e}")
+            await self.db.delete(file_obj)
 
+        descendants = await self.repo.get_folders_by_prefix(folder_path)
+        for subfolder in descendants:
+            await self.db.delete(subfolder)
         await self.db.delete(folder)
         await self.db.commit()
